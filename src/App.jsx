@@ -529,7 +529,7 @@ function Auth({ onLogin, notify, theme, toggleTheme }) {
         </div>
         <div className="fr">
           <div className="fg"><label className="fl">Level</label><select className="sel" value={reg.level} onChange={e => setReg(p => ({ ...p, level: e.target.value }))}><option>EMT</option><option>Paramedic</option></select></div>
-          <div className="fg"><label className="fl">Shift</label><select className="sel" value={reg.shift} onChange={e => setReg(p => ({ ...p, shift: e.target.value }))}><option>A</option><option>B</option><option>C</option></select></div>
+          <div className="fg"><label className="fl">Shift</label><select className="sel" value={reg.shift} onChange={e => setReg(p => ({ ...p, shift: e.target.value }))}><option>A</option><option>B</option><option>C</option><option>Days</option></select></div>
         </div>
         <div className="fg"><label className="fl">Phone</label><input className="fi" type="tel" value={reg.phone} onChange={e => setReg(p => ({ ...p, phone: e.target.value }))} /></div>
         <button className="bt bta" style={{ width: "100%", marginTop: 6 }} onClick={register} disabled={busy}>{busy ? "Registering..." : "Register"}</button>
