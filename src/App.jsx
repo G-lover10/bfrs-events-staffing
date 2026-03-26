@@ -77,28 +77,112 @@ const loadSheetJS = () => {
 };
 
 const parseExcelToEvents = (wb) => {
+  const XLSX = window.XLSX;
   const sheet = wb.Sheets[wb.SheetNames[0]];
-  const rows = window.XLSX.utils.sheet_to_json(sheet, { defval: "" });
   const events = []; const errors = [];
-  rows.forEach((r, i) => {
-    const name = r["Event Name"] || r["name"] || r["Name"] || "";
-    const date = r["Date"] || r["date"] || "";
-    const timeStart = r["Start Time"] || r["time_start"] || r["Start"] || "";
-    const timeEnd = r["End Time"] || r["time_end"] || r["End"] || "";
-    const location = r["Location"] || r["location"] || "";
-    const venue = r["Venue"] || r["venue"] || "";
-    const notes = r["Notes"] || r["notes"] || "";
-    const np = parseInt(r["Paramedics Needed"] || r["needed_paramedics"] || r["Paramedics"] || 0);
-    const ne = parseInt(r["EMTs Needed"] || r["needed_emts"] || r["EMTs"] || 0);
-    if (!name || !date) { errors.push(`Row ${i + 2}: missing name or date`); return; }
-    let fDate = date;
-    if (typeof date === "number") {
-      const d = new Date((date - 25569) * 86400 * 1000);
-      fDate = d.toISOString().split("T")[0];
+
+  // Detect format: check if row 1 has dates across columns (calendar grid)
+  const range = XLSX.utils.decode_range(sheet["!ref"] || "A1");
+  const firstRowVals = [];
+  for (let c = range.s.c; c <= range.e.c; c++) {
+    const cell = sheet[XLSX.utils.encode_cell({ r: 0, c })];
+    firstRowVals.push(cell ? cell.v : null);
+  }
+  const dateCount = firstRowVals.filter(v => v instanceof Date || (typeof v === "number" && v > 40000 && v < 60000)).length;
+  const isCalendarGrid = dateCount >= 5;
+
+  if (isCalendarGrid) {
+    // ── CALENDAR GRID FORMAT (BFRS style) ──
+    // Each column = a date, events stacked in rows underneath
+    const timeRx = /^(\d{3,4})\s*-\s*(\d{3,4})$/;
+    const skipWords = ["none", "oooooo", "tbd", ""];
+    const dayNames = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"];
+    const shifts = ["a","b","c"];
+
+    const fmtTime = (t) => {
+      const s = t.padStart(4, "0");
+      return s.slice(0, 2) + ":" + s.slice(2);
+    };
+
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      // Row 0 = date
+      const dateCell = sheet[XLSX.utils.encode_cell({ r: 0, c })];
+      if (!dateCell) continue;
+      let dateVal = dateCell.v;
+      let fDate;
+      if (dateVal instanceof Date) {
+        fDate = dateVal.toISOString().split("T")[0];
+      } else if (typeof dateVal === "number" && dateVal > 40000) {
+        const d = new Date((dateVal - 25569) * 86400000);
+        fDate = d.toISOString().split("T")[0];
+      } else continue;
+
+      // Scan rows for event names and times
+      const cellData = [];
+      for (let r = 1; r <= range.e.r; r++) {
+        const cell = sheet[XLSX.utils.encode_cell({ r, c })];
+        const val = cell ? String(cell.v).trim() : "";
+        cellData.push({ row: r, val });
+      }
+
+      // Find events: non-empty cells that aren't day names, shifts, times, or skip words
+      for (let i = 0; i < cellData.length; i++) {
+        const { val } = cellData[i];
+        if (!val || skipWords.includes(val.toLowerCase())) continue;
+        if (dayNames.includes(val.toLowerCase())) continue;
+        if (shifts.includes(val.toLowerCase())) continue;
+        if (timeRx.test(val)) continue;
+
+        // This looks like an event name — find its time in next 1-4 rows
+        let timeStart = "00:00", timeEnd = "23:59";
+        for (let j = i + 1; j < Math.min(i + 5, cellData.length); j++) {
+          const m = timeRx.exec(cellData[j].val);
+          if (m) {
+            timeStart = fmtTime(m[1]);
+            timeEnd = fmtTime(m[2]);
+            break;
+          }
+        }
+
+        // Extract venue from "Event @ Venue" pattern
+        let name = val, venue = "";
+        const atIdx = val.indexOf(" @ ");
+        if (atIdx > -1) {
+          name = val.substring(0, atIdx).trim();
+          venue = val.substring(atIdx + 3).trim();
+        }
+
+        events.push({
+          name, date: fDate, time_start: timeStart, time_end: timeEnd,
+          location: "", venue, notes: "", status: "open",
+          needed_paramedics: 0, needed_emts: 0
+        });
+      }
     }
-    events.push({ name, date: fDate, time_start: timeStart || "00:00", time_end: timeEnd || "23:59",
-      location, venue, notes, status: "open", needed_paramedics: np || 0, needed_emts: ne || 0 });
-  });
+  } else {
+    // ── TABLE FORMAT (standard rows with headers) ──
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+    rows.forEach((r, i) => {
+      const name = r["Event Name"] || r["name"] || r["Name"] || "";
+      const date = r["Date"] || r["date"] || "";
+      const timeStart = r["Start Time"] || r["time_start"] || r["Start"] || "";
+      const timeEnd = r["End Time"] || r["time_end"] || r["End"] || "";
+      const location = r["Location"] || r["location"] || "";
+      const venue = r["Venue"] || r["venue"] || "";
+      const notes = r["Notes"] || r["notes"] || "";
+      const np = parseInt(r["Paramedics Needed"] || r["needed_paramedics"] || r["Paramedics"] || 0);
+      const ne = parseInt(r["EMTs Needed"] || r["needed_emts"] || r["EMTs"] || 0);
+      if (!name || !date) { errors.push(`Row ${i + 2}: missing name or date`); return; }
+      let fDate = date;
+      if (typeof date === "number") {
+        const d = new Date((date - 25569) * 86400000);
+        fDate = d.toISOString().split("T")[0];
+      }
+      events.push({ name, date: fDate, time_start: timeStart || "00:00", time_end: timeEnd || "23:59",
+        location, venue, notes, status: "open", needed_paramedics: np || 0, needed_emts: ne || 0 });
+    });
+  }
+
   return { events, errors };
 };
 
@@ -442,6 +526,7 @@ function CoordView({ profile, notify }) {
   const [editEv, setEditEv] = useState(null);
   const fileRef = useRef(null);
   const [upRes, setUpRes] = useState(null);
+  const [previewEvs, setPreviewEvs] = useState(null);
 
   const pendingAccounts = profiles.filter(p => !p.approved && p.role === "staff");
   const pendingCR = cancelReqs.filter(c => c.status === "pending");
@@ -574,7 +659,7 @@ function CoordView({ profile, notify }) {
     notify("Cancel denied."); refresh();
   };
 
-  // ── Excel import ──
+  // ── Excel import with preview ──
   const handleUpload = async (e) => {
     const file = e.target.files[0]; if (!file) return;
     try {
@@ -582,16 +667,21 @@ function CoordView({ profile, notify }) {
       const data = await file.arrayBuffer();
       const wb = XLSX.read(data);
       const { events: newEvs, errors } = parseExcelToEvents(wb);
-      if (newEvs.length > 0) {
-        const toInsert = newEvs.map(ev => ({ ...ev, created_by: profile.id }));
-        const { error } = await supabase.from("events").insert(toInsert);
-        if (error) { notify("Import error: " + error.message, "error"); return; }
-        await logActivity("imported_events", "event", "bulk", { count: newEvs.length });
-      }
-      setUpRes({ count: newEvs.length, errors });
-      notify(`${newEvs.length} events imported!`); refresh();
+      setPreviewEvs({ events: newEvs, errors, fileName: file.name });
+      if (newEvs.length === 0) notify("No events found in file.", "warn");
+      else notify(`Found ${newEvs.length} events — review below.`);
     } catch (err) { notify("Import failed: " + err.message, "error"); }
     e.target.value = "";
+  };
+  const confirmImport = async () => {
+    if (!previewEvs || previewEvs.events.length === 0) return;
+    const toInsert = previewEvs.events.map(ev => ({ ...ev, created_by: profile.id }));
+    const { error } = await supabase.from("events").insert(toInsert);
+    if (error) { notify("Import error: " + error.message, "error"); return; }
+    await logActivity("imported_events", "event", "bulk", { count: previewEvs.events.length });
+    setUpRes({ count: previewEvs.events.length, errors: previewEvs.errors });
+    setPreviewEvs(null);
+    notify(`${toInsert.length} events imported!`); refresh();
   };
 
   // ── Dashboard data ──
@@ -904,15 +994,42 @@ function CoordView({ profile, notify }) {
           <div style={{ fontSize: 28 }}>📊</div><p>Click to upload .xlsx file</p>
           <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleUpload} />
         </div>
-        {upRes && (<div style={{ marginTop: 12 }}>
-          <div style={{ color: "var(--g)", fontSize: 13, fontWeight: 600 }}>{upRes.count} events imported</div>
+        {upRes && !previewEvs && (<div style={{ marginTop: 12 }}>
+          <div style={{ color: "var(--g)", fontSize: 13, fontWeight: 600 }}>✅ {upRes.count} events imported successfully</div>
           {upRes.errors.length > 0 && <div style={{ color: "var(--o)", fontSize: 11, marginTop: 4 }}>{upRes.errors.join("; ")}</div>}
         </div>)}
       </div>
+
+      {previewEvs && previewEvs.events.length > 0 && (
+        <div className="af">
+          <div className="sct">Preview — {previewEvs.events.length} Events Found</div>
+          <div style={{ fontSize: 11, color: "var(--t2)", marginBottom: 10 }}>From: {previewEvs.fileName}</div>
+          <div style={{ maxHeight: 300, overflowY: "auto" }}>
+            <table className="lt">
+              <thead><tr><th>Event</th><th>Date</th><th>Time</th><th>Venue</th></tr></thead>
+              <tbody>{previewEvs.events.map((ev, i) => (
+                <tr key={i}>
+                  <td style={{ fontWeight: 500 }}>{ev.name}</td>
+                  <td>{fmtDate(ev.date)}</td>
+                  <td>{fmtTime(ev.time_start)} – {fmtTime(ev.time_end)}</td>
+                  <td style={{ color: "var(--t2)" }}>{ev.venue || "—"}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+          {previewEvs.errors.length > 0 && <div style={{ color: "var(--o)", fontSize: 11, marginTop: 8 }}>Warnings: {previewEvs.errors.join("; ")}</div>}
+          <div className="pa" style={{ marginTop: 14 }}>
+            <button className="bt btg" onClick={confirmImport}>✓ Import {previewEvs.events.length} Events</button>
+            <button className="bt bp" onClick={() => setPreviewEvs(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
       <div className="af">
-        <div className="sct">Expected Columns</div>
+        <div className="sct">Supported Formats</div>
         <div style={{ fontSize: 11, color: "var(--t2)", fontFamily: "'DM Mono', monospace", lineHeight: 1.8 }}>
-          Event Name*, Date*, Start Time, End Time, Location, Venue, Notes, Paramedics Needed, EMTs Needed
+          <strong style={{ color: "var(--a)" }}>Calendar Grid (BFRS style):</strong> Dates across top row, events stacked under each date with times below.<br />
+          <strong style={{ color: "var(--a)" }}>Table Format:</strong> Columns: Event Name*, Date*, Start Time, End Time, Location, Venue, Notes, Paramedics Needed, EMTs Needed
         </div>
       </div>
     </>}
