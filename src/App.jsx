@@ -27,6 +27,7 @@ const calcHours = (inT, outT) => { if (!inT || !outT) return "0.0"; return ((new
 // Reference: March 26, 2026 = C shift
 const SHIFT_REF_DATE = new Date("2026-03-26T00:00:00");
 const SHIFT_ORDER = ["C", "A", "B"];
+const NEXT_SHIFT = { A: "B", B: "C", C: "A" }; // A works → gets off 0800 on B day, etc.
 const getShiftForDate = (dateStr) => {
   const d = new Date(dateStr + "T00:00:00");
   const diff = Math.round((d - SHIFT_REF_DATE) / 86400000);
@@ -930,9 +931,10 @@ function CoordView({ profile, notify }) {
                       {pendEv.map(s => {
                         const ac = profiles.find(p => p.id === s.staff_id); if (!ac) return null;
                         const onShift = getShiftForDate(ev.date) === ac.shift;
+                        const gettingOff = getShiftForDate(ev.date) === NEXT_SHIFT[ac.shift];
                         return (
                           <div className="srow" key={s.id}>
-                            <div><div className="sn">{ac.name} {onShift && <span style={{ color: "var(--o)", fontSize: 10 }}>⚠️ On shift {ac.shift}</span>}</div><div className="sme">{ac.level} · Shift {ac.shift} · {fmtDateTime(s.signed_up_at)}</div></div>
+                            <div><div className="sn">{ac.name} {onShift && <span style={{ color: "var(--o)", fontSize: 10 }}>⚠️ On duty (Shift {ac.shift})</span>}{gettingOff && <span style={{ color: "var(--a)", fontSize: 10 }}>ℹ️ Off at 0800</span>}</div><div className="sme">{ac.level} · Shift {ac.shift} · {fmtDateTime(s.signed_up_at)}</div></div>
                             <div style={{ display: "flex", gap: 4 }}><button className="bt bts btg" onClick={() => approveSignup(s.id)}>Approve</button><button className="bt bts btr" onClick={() => denySignup(s.id)}>Deny</button></div>
                           </div>
                         );
@@ -1287,7 +1289,7 @@ function StaffView({ profile, notify }) {
               </div>
             </div>
             {ev.notes && <div className="nts">📋 {ev.notes}</div>}
-            {getShiftForDate(ev.date) === profile.shift && <div className="shift-warn">⚠️ This event falls on your regular shift ({profile.shift}). {ev.time_start < "09:00" ? "Event starts before 0900 — you may arrive late from duty." : "You may need to leave regular duty for this event."}</div>}
+            {(() => { const evShift = getShiftForDate(ev.date); const offDay = NEXT_SHIFT[profile.shift]; if (evShift === profile.shift) return <div className="shift-warn">⚠️ You'll be on regular duty (Shift {profile.shift}) this day. You may need to leave your shift for this event.</div>; if (evShift === offDay && ev.time_start < "08:00") return <div className="shift-warn">⚠️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts before 0800 — you may arrive late.</div>; if (evShift === offDay) return <div className="shift-warn" style={{borderColor:"rgba(0,212,255,.2)",color:"var(--a)"}}>ℹ️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts after your shift ends.</div>; return null; })()}
             <div className="slb">
               <div className="sb"><div className="sl"><span>Medics</span><span>{pc}/{ev.needed_paramedics}</span></div><div className="st"><div className={`sf p${pc >= ev.needed_paramedics ? " fu" : ""}`} style={{ width: `${Math.min(100, (pc / (ev.needed_paramedics || 1)) * 100)}%` }} /></div></div>
               <div className="sb"><div className="sl"><span>EMT</span><span>{ec}/{ev.needed_emts}</span></div><div className="st"><div className={`sf e${ec >= ev.needed_emts ? " fu" : ""}`} style={{ width: `${Math.min(100, (ec / (ev.needed_emts || 1)) * 100)}%` }} /></div></div>
@@ -1329,7 +1331,7 @@ function StaffView({ profile, notify }) {
               </div>
             </div>
             {ev.notes && <div className="nts">📋 {ev.notes}</div>}
-            {getShiftForDate(ev.date) === profile.shift && <div className="shift-warn">⚠️ This event falls on your regular shift ({profile.shift}). {ev.time_start < "09:00" ? "Event starts before 0900 — you may arrive late from duty." : "You may need to leave regular duty for this event."}</div>}
+            {(() => { const evShift = getShiftForDate(ev.date); const offDay = NEXT_SHIFT[profile.shift]; if (evShift === profile.shift) return <div className="shift-warn">⚠️ You'll be on regular duty (Shift {profile.shift}) this day. You may need to leave your shift for this event.</div>; if (evShift === offDay && ev.time_start < "08:00") return <div className="shift-warn">⚠️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts before 0800 — you may arrive late.</div>; if (evShift === offDay) return <div className="shift-warn" style={{borderColor:"rgba(0,212,255,.2)",color:"var(--a)"}}>ℹ️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts after your shift ends.</div>; return null; })()}
             {myAttRec && (
               <div style={{ marginTop: 8, fontSize: 11, color: "var(--t2)", fontFamily: "'DM Mono', monospace" }}>
                 In: {fmtDateTime(myAttRec.sign_in_time)}{myAttRec.sign_out_time && ` · Out: ${fmtDateTime(myAttRec.sign_out_time)} · ${calcHours(myAttRec.sign_in_time, myAttRec.sign_out_time)} hrs`}
