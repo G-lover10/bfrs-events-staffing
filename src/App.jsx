@@ -373,6 +373,7 @@ export default function App() {
   const [notif, setNotif] = useState(null);
   const [showPwModal, setShowPwModal] = useState(false);
   const [showFbModal, setShowFbModal] = useState(false);
+  const [viewAsStaff, setViewAsStaff] = useState(false);
   const [theme, setTheme] = useState(() => {
     try { return localStorage.getItem("bfrs-theme") || "dark"; } catch { return "dark"; }
   });
@@ -420,6 +421,7 @@ export default function App() {
                 <div className="pill">{profile.name}<span className={`rb${profile.role === "coordinator" ? " co" : ""}`}>{profile.role}</span></div>
                 <button className="theme-btn" onClick={toggleTheme} title={theme === "dark" ? "Light mode" : "Dark mode"}>{theme === "dark" ? "☀️" : "🌙"}</button>
                 <button className="lo" onClick={() => setShowPwModal(true)} style={{ borderColor: "var(--a)", color: "var(--a)" }}>🔑</button>
+                {profile.role === "coordinator" && <button className="lo" onClick={() => setViewAsStaff(v => !v)} style={{ borderColor: viewAsStaff ? "var(--g)" : "var(--bd)", color: viewAsStaff ? "var(--g)" : "var(--t2)", fontSize: 10 }}>{viewAsStaff ? "👁 Staff View" : "👁 Coord"}</button>}
                 <button className="lo" onClick={handleLogout}>Logout</button>
               </div>
             </div>
@@ -427,7 +429,7 @@ export default function App() {
             {showFbModal && <FeedbackModal onClose={() => setShowFbModal(false)} notify={notify} userId={profile.id} />}
             <button className="fb-fab" onClick={() => setShowFbModal(true)} title="Send Feedback">💬</button>
             <main className="mn">
-              {profile.role === "coordinator"
+              {profile.role === "coordinator" && !viewAsStaff
                 ? <CoordView profile={profile} notify={notify} />
                 : <StaffView profile={profile} notify={notify} />}
             </main>
