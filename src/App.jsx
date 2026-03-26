@@ -286,7 +286,48 @@ body{background:var(--bg);color:var(--t);font-family:'DM Sans',sans-serif;min-he
 .promo-btn{background:none;border:1px solid var(--a);color:var(--a);padding:3px 8px;border-radius:4px;font-size:10px;cursor:pointer;font-family:'DM Mono',monospace}.promo-btn:hover{background:var(--a);color:var(--bg)}
 .demote-btn{background:none;border:1px solid var(--r);color:var(--r);padding:3px 8px;border-radius:4px;font-size:10px;cursor:pointer;font-family:'DM Mono',monospace}.demote-btn:hover{background:var(--r);color:#fff}
 .bulk-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.fb-fab{position:fixed;bottom:20px;left:20px;width:44px;height:44px;border-radius:22px;background:var(--a);color:var(--bg);border:none;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.3);z-index:800;transition:transform .2s}.fb-fab:hover{transform:scale(1.1)}
+.fb-type{display:flex;gap:6px;margin-bottom:14px}.fb-type button{flex:1;padding:8px;border-radius:8px;border:1px solid var(--bd);background:var(--s2);color:var(--t2);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif}.fb-type button.act{border-color:var(--a);color:var(--a);background:rgba(0,212,255,.1)}
+.fb-item{background:var(--s);border:1px solid var(--bd);border-radius:10px;padding:12px;margin-bottom:8px}
+.fb-meta{font-size:10px;color:var(--t2);font-family:'DM Mono',monospace;margin-top:6px;display:flex;justify-content:space-between;align-items:center}
 `;
+
+// ─── FEEDBACK MODAL ───────────────────────────────────────────────────────────
+function FeedbackModal({ onClose, notify, userId }) {
+  const [type, setType] = useState("idea");
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    if (!msg.trim()) { notify("Please enter a message.", "error"); return; }
+    setBusy(true);
+    const { error } = await supabase.from("feedback").insert({ user_id: userId, type, message: msg.trim() });
+    setBusy(false);
+    if (error) { notify(error.message, "error"); return; }
+    notify("Feedback submitted — thank you!");
+    onClose();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <div className="sct">Send Feedback</div>
+        <div className="fb-type">
+          <button className={type === "bug" ? "act" : ""} onClick={() => setType("bug")}>🐛 Bug</button>
+          <button className={type === "idea" ? "act" : ""} onClick={() => setType("idea")}>💡 Idea</button>
+          <button className={type === "comment" ? "act" : ""} onClick={() => setType("comment")}>💬 Comment</button>
+        </div>
+        <div className="fg"><label className="fl">{type === "bug" ? "Describe the bug" : type === "idea" ? "What's your idea?" : "Your comment"}</label>
+          <textarea className="ta" rows={4} value={msg} onChange={e => setMsg(e.target.value)} placeholder={type === "bug" ? "What happened? What did you expect?" : type === "idea" ? "How could we make this app better?" : "Any thoughts or feedback..."} />
+        </div>
+        <div className="pa" style={{ marginTop: 8 }}>
+          <button className="bt bta" onClick={submit} disabled={busy}>{busy ? "Sending..." : "Submit"}</button>
+          <button className="bt bp" onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── CHANGE PASSWORD ──────────────────────────────────────────────────────────
 function ChangePassword({ onClose, notify }) {
@@ -331,6 +372,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [notif, setNotif] = useState(null);
   const [showPwModal, setShowPwModal] = useState(false);
+  const [showFbModal, setShowFbModal] = useState(false);
   const [theme, setTheme] = useState(() => {
     try { return localStorage.getItem("bfrs-theme") || "dark"; } catch { return "dark"; }
   });
@@ -382,6 +424,8 @@ export default function App() {
               </div>
             </div>
             {showPwModal && <ChangePassword onClose={() => setShowPwModal(false)} notify={notify} />}
+            {showFbModal && <FeedbackModal onClose={() => setShowFbModal(false)} notify={notify} userId={profile.id} />}
+            <button className="fb-fab" onClick={() => setShowFbModal(true)} title="Send Feedback">💬</button>
             <main className="mn">
               {profile.role === "coordinator"
                 ? <CoordView profile={profile} notify={notify} />
@@ -488,16 +532,18 @@ function useData() {
   const [attendance, setAttendance] = useState([]);
   const [cancelReqs, setCancelReqs] = useState([]);
   const [activityLog, setActivityLog] = useState([]);
+  const [feedback, setFeedback] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
-    const [pR, eR, sR, aR, cR, lR] = await Promise.all([
+    const [pR, eR, sR, aR, cR, lR, fR] = await Promise.all([
       supabase.from("profiles").select("*").order("name"),
       supabase.from("events").select("*").order("date"),
       supabase.from("signups").select("*"),
       supabase.from("attendance").select("*"),
       supabase.from("cancel_requests").select("*").order("requested_at", { ascending: false }),
       supabase.from("activity_log").select("*").order("created_at", { ascending: false }).limit(200),
+      supabase.from("feedback").select("*").order("created_at", { ascending: false }),
     ]);
     if (pR.data) setProfiles(pR.data);
     if (eR.data) setEvents(eR.data);
@@ -505,12 +551,13 @@ function useData() {
     if (aR.data) setAttendance(aR.data);
     if (cR.data) setCancelReqs(cR.data);
     if (lR.data) setActivityLog(lR.data);
+    if (fR.data) setFeedback(fR.data);
     setLoading(false);
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  return { profiles, events, signups, attendance, cancelReqs, activityLog, loading, refresh };
+  return { profiles, events, signups, attendance, cancelReqs, activityLog, feedback, loading, refresh };
 }
 
 // ─── EVENT STATUS BADGE ───────────────────────────────────────────────────────
@@ -520,7 +567,7 @@ function StatusBadge({ status }) {
 
 // ─── COORDINATOR VIEW ─────────────────────────────────────────────────────────
 function CoordView({ profile, notify }) {
-  const { profiles, events, signups, attendance, cancelReqs, activityLog, loading, refresh } = useData();
+  const { profiles, events, signups, attendance, cancelReqs, activityLog, feedback, loading, refresh } = useData();
   const [tab, setTab] = useState("events");
   const [addEv, setAddEv] = useState({ name: "", date: "", time_start: "", time_end: "", location: "", venue: "", notes: "", needed_paramedics: 2, needed_emts: 2 });
   const [selEv, setSelEv] = useState(null);
@@ -730,6 +777,7 @@ function CoordView({ profile, notify }) {
       <button className={`tb${tab === "cr" ? " on" : ""}`} onClick={() => setTab("cr")}>Cancel Reqs{pendingCR.length > 0 && <span className="nd or">{pendingCR.length}</span>}</button>
       <button className={`tb${tab === "log" ? " on" : ""}`} onClick={() => setTab("log")}>Activity Log</button>
       <button className={`tb${tab === "import" ? " on" : ""}`} onClick={() => setTab("import")}>Import</button>
+      <button className={`tb${tab === "fb" ? " on" : ""}`} onClick={() => setTab("fb")}>Feedback{feedback.filter(f => f.status === "new").length > 0 && <span className="nd or">{feedback.filter(f => f.status === "new").length}</span>}</button>
     </div>
 
     {/* ── DASHBOARD ── */}
@@ -1034,10 +1082,42 @@ function CoordView({ profile, notify }) {
         </div>
       </div>
     </>}
+
+    {/* ── FEEDBACK TAB ── */}
+    {tab === "fb" && <>
+      <div className="stw">
+        <div className="stc"><div className="sv so">{feedback.filter(f => f.status === "new").length}</div><div className="svl">New</div></div>
+        <div className="stc"><div className="sv sg">{feedback.filter(f => f.status === "reviewed").length}</div><div className="svl">Reviewed</div></div>
+        <div className="stc"><div className="sv sa">{feedback.length}</div><div className="svl">Total</div></div>
+      </div>
+      {feedback.length === 0 && <div className="ey"><div className="ei">📝</div>No feedback yet.</div>}
+      {feedback.map(f => {
+        const user = profiles.find(p => p.id === f.user_id);
+        const typeIcon = f.type === "bug" ? "🐛" : f.type === "idea" ? "💡" : "💬";
+        return (
+          <div className="fb-item" key={f.id}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div><span style={{ fontSize: 14 }}>{typeIcon}</span> <span style={{ fontWeight: 600, fontSize: 13, textTransform: "capitalize" }}>{f.type}</span></div>
+              <span className={`bg ${f.status === "new" ? "pc" : f.status === "reviewed" ? "si" : "cf"}`}>{f.status}</span>
+            </div>
+            <div style={{ margin: "8px 0", fontSize: 13, lineHeight: 1.5 }}>{f.message}</div>
+            <div className="fb-meta">
+              <span>{user?.name || "Unknown"} · {fmtDateTime(f.created_at)}</span>
+              {f.status === "new" && <button className="bt bts btg" onClick={async () => {
+                await supabase.from("feedback").update({ status: "reviewed" }).eq("id", f.id);
+                notify("Marked as reviewed."); refresh();
+              }}>Mark Reviewed</button>}
+              {f.status === "reviewed" && <button className="bt bts bta" onClick={async () => {
+                await supabase.from("feedback").update({ status: "resolved" }).eq("id", f.id);
+                notify("Marked as resolved."); refresh();
+              }}>Resolve</button>}
+            </div>
+          </div>
+        );
+      })}
+    </>}
   </>);
 }
-
-// ─── STAFF VIEW ───────────────────────────────────────────────────────────────
 function StaffView({ profile, notify }) {
   const { profiles, events, signups, attendance, cancelReqs, loading, refresh } = useData();
   const [tab, setTab] = useState("events");
