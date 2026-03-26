@@ -510,7 +510,7 @@ function Auth({ onLogin, notify, theme, toggleTheme }) {
       </div>
       <div className="ls">Special Events Staffing — Birmingham Fire &amp; Rescue</div>
       <div className="at">
-        <button className={`atb${v === "login" ? " on" : ""}`} onClick={() => { setV("login"); setErr(""); }}>Clock In</button>
+        <button className={`atb${v === "login" ? " on" : ""}`} onClick={() => { setV("login"); setErr(""); }}>Sign In</button>
         <button className={`atb${v === "register" ? " on" : ""}`} onClick={() => { setV("register"); setRErr(""); }}>Register</button>
       </div>
       {v === "login" ? (<>
