@@ -107,6 +107,11 @@ const css = `
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--bg:#0a0e14;--s:#111820;--s2:#182030;--bd:#1e2a3a;--t:#e8edf3;--t2:#8899aa;--a:#00d4ff;--a2:#0099cc;--g:#22c55e;--r:#ef4444;--o:#f59e0b;--y:#ffd166;--p:#a78bfa}
+[data-theme="light"]{--bg:#f0f2f5;--s:#ffffff;--s2:#e8ecf1;--bd:#d1d9e0;--t:#1a2332;--t2:#5a6a7a;--a:#0088cc;--a2:#006699;--g:#16a34a;--r:#dc2626;--o:#d97706;--y:#b45309;--p:#7c3aed}
+[data-theme="light"] body{background:var(--bg);color:var(--t)}
+[data-theme="light"] .fi,[data-theme="light"] .ta,[data-theme="light"] .sel{background:var(--s2);border-color:var(--bd);color:var(--t)}
+[data-theme="light"] .nf.ok{color:#fff}[data-theme="light"] .nf.wr{color:#fff}
+.theme-btn{background:none;border:1px solid var(--bd);color:var(--t2);font-size:16px;width:32px;height:32px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center}.theme-btn:hover{border-color:var(--a)}
 body{background:var(--bg);color:var(--t);font-family:'DM Sans',sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased}
 .app{max-width:920px;margin:0 auto;padding:0 16px 60px}
 .hdr{display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid var(--bd);margin-bottom:20px;flex-wrap:wrap;gap:8px}
@@ -241,6 +246,15 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [notif, setNotif] = useState(null);
   const [showPwModal, setShowPwModal] = useState(false);
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem("bfrs-theme") || "dark"; } catch { return "dark"; }
+  });
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    try { localStorage.setItem("bfrs-theme", next); } catch {}
+  };
+  useEffect(() => { document.documentElement.setAttribute("data-theme", theme); }, [theme]);
   const notify = useCallback((msg, t = "ok") => { setNotif({ msg, t }); setTimeout(() => setNotif(null), 3200); }, []);
 
   useEffect(() => {
@@ -268,15 +282,16 @@ export default function App() {
     <><style>{css}</style>
       <div className="app">
         {!session || !profile ? (
-          <Auth onLogin={(s, p) => { setSession(s); setProfile(p); }} notify={notify} />
+          <Auth onLogin={(s, p) => { setSession(s); setProfile(p); }} notify={notify} theme={theme} toggleTheme={toggleTheme} />
         ) : !profile.approved ? (
-          <PendingScreen onLogout={handleLogout} />
+          <PendingScreen onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme} />
         ) : (
           <>
             <div className="hdr">
               <div className="hdr-l"><div className="brand">BFRS <span>Events</span></div><span className="beta">BETA {APP_VERSION}</span></div>
               <div className="hdr-r">
                 <div className="pill">{profile.name}<span className={`rb${profile.role === "coordinator" ? " co" : ""}`}>{profile.role}</span></div>
+                <button className="theme-btn" onClick={toggleTheme} title={theme === "dark" ? "Light mode" : "Dark mode"}>{theme === "dark" ? "☀️" : "🌙"}</button>
                 <button className="lo" onClick={() => setShowPwModal(true)} style={{ borderColor: "var(--a)", color: "var(--a)" }}>🔑</button>
                 <button className="lo" onClick={handleLogout}>Logout</button>
               </div>
@@ -296,10 +311,13 @@ export default function App() {
 }
 
 // ─── PENDING ──────────────────────────────────────────────────────────────────
-function PendingScreen({ onLogout }) {
+function PendingScreen({ onLogout, theme, toggleTheme }) {
   return (
     <div className="lw"><div className="lc">
-      <div className="ll">BFRS Events <span className="beta" style={{ fontSize: 10 }}>BETA {APP_VERSION}</span></div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div className="ll">BFRS Events <span className="beta" style={{ fontSize: 10 }}>BETA {APP_VERSION}</span></div>
+        <button className="theme-btn" onClick={toggleTheme}>{theme === "dark" ? "☀️" : "🌙"}</button>
+      </div>
       <div style={{ marginTop: 20 }}>
         <div className="pn"><h3>⏳ Pending Approval</h3><p>Your registration is under review by a coordinator. You'll be able to log in once approved.</p></div>
         <button className="bt bp" style={{ marginTop: 14, width: "100%" }} onClick={onLogout}>Back to Login</button>
@@ -309,7 +327,7 @@ function PendingScreen({ onLogout }) {
 }
 
 // ─── AUTH ──────────────────────────────────────────────────────────────────────
-function Auth({ onLogin, notify }) {
+function Auth({ onLogin, notify, theme, toggleTheme }) {
   const [v, setV] = useState("login");
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
@@ -344,7 +362,10 @@ function Auth({ onLogin, notify }) {
 
   return (
     <div className="lw"><div className="lc">
-      <div className="ll">BFRS Events <span className="beta" style={{ fontSize: 10 }}>BETA {APP_VERSION}</span></div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div className="ll">BFRS Events <span className="beta" style={{ fontSize: 10 }}>BETA {APP_VERSION}</span></div>
+        <button className="theme-btn" onClick={toggleTheme}>{theme === "dark" ? "☀️" : "🌙"}</button>
+      </div>
       <div className="ls">Special Events Staffing — Birmingham Fire &amp; Rescue</div>
       <div className="at">
         <button className={`atb${v === "login" ? " on" : ""}`} onClick={() => { setV("login"); setErr(""); }}>Sign In</button>
@@ -727,7 +748,7 @@ function CoordView({ profile, notify }) {
               </div>
               {ev.notes && <div className="nts">📋 {ev.notes}</div>}
               <div className="slb">
-                <div className="sb"><div className="sl"><span>Para</span><span>{pc}/{ev.needed_paramedics}</span></div><div className="st"><div className={`sf p${pc >= ev.needed_paramedics ? " fu" : ""}`} style={{ width: `${Math.min(100, (pc / (ev.needed_paramedics || 1)) * 100)}%` }} /></div></div>
+                <div className="sb"><div className="sl"><span>Medics</span><span>{pc}/{ev.needed_paramedics}</span></div><div className="st"><div className={`sf p${pc >= ev.needed_paramedics ? " fu" : ""}`} style={{ width: `${Math.min(100, (pc / (ev.needed_paramedics || 1)) * 100)}%` }} /></div></div>
                 <div className="sb"><div className="sl"><span>EMT</span><span>{ec}/{ev.needed_emts}</span></div><div className="st"><div className={`sf e${ec >= ev.needed_emts ? " fu" : ""}`} style={{ width: `${Math.min(100, (ec / (ev.needed_emts || 1)) * 100)}%` }} /></div></div>
               </div>
               {selEv === ev.id && (
@@ -1009,7 +1030,7 @@ function StaffView({ profile, notify }) {
             </div>
             {ev.notes && <div className="nts">📋 {ev.notes}</div>}
             <div className="slb">
-              <div className="sb"><div className="sl"><span>Para</span><span>{pc}/{ev.needed_paramedics}</span></div><div className="st"><div className={`sf p${pc >= ev.needed_paramedics ? " fu" : ""}`} style={{ width: `${Math.min(100, (pc / (ev.needed_paramedics || 1)) * 100)}%` }} /></div></div>
+              <div className="sb"><div className="sl"><span>Medics</span><span>{pc}/{ev.needed_paramedics}</span></div><div className="st"><div className={`sf p${pc >= ev.needed_paramedics ? " fu" : ""}`} style={{ width: `${Math.min(100, (pc / (ev.needed_paramedics || 1)) * 100)}%` }} /></div></div>
               <div className="sb"><div className="sl"><span>EMT</span><span>{ec}/{ev.needed_emts}</span></div><div className="st"><div className={`sf e${ec >= ev.needed_emts ? " fu" : ""}`} style={{ width: `${Math.min(100, (ec / (ev.needed_emts || 1)) * 100)}%` }} /></div></div>
             </div>
             {myAttRec && (
