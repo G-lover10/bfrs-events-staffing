@@ -10,9 +10,10 @@ const SUPABASE_URL = "https://tohhqssnngvavkkeqzfl.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvaGhxc3Nubmd2YXZra2VxemZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1NDg2NTAsImV4cCI6MjA5MDEyNDY1MH0.3mma-zOBQ63AM7FgHjRrKrnB_MX1FljnJPCrpmAMbIc";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const APP_VERSION = "0.4.0";
+const APP_VERSION = "0.5.0";
 const SOFT_LIMIT = 4;
-const BADGE_SRC = "data:image/jpeg;base64,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";
+const BADGE_SRC = "/badge.jpg";
+const SIGNUP_STATUS = {pending:{label:"⏳ Pending",cls:"pc"},confirmed:{label:"✅ Approved",cls:"si"},denied:{label:"❌ Denied",cls:"dn"}};
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 const nowISO = () => new Date().toISOString();
@@ -21,6 +22,16 @@ const fmtTime = (t) => { if (!t) return ""; const [h, m] = t.split(":"); const h
 const fmtDateTime = (iso) => { if (!iso) return "—"; const d = new Date(iso); return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); };
 const fmtFull = (iso) => { if (!iso) return "—"; const d = new Date(iso); return d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" }); };
 const calcHours = (inT, outT) => { if (!inT || !outT) return "0.0"; return ((new Date(outT) - new Date(inT)) / 3600000).toFixed(1); };
+
+// ─── SHIFT CALCULATOR (24 on, 48 off: A→B→C) ─────────────────────────────────
+// Reference: March 26, 2026 = C shift
+const SHIFT_REF_DATE = new Date("2026-03-26T00:00:00");
+const SHIFT_ORDER = ["C", "A", "B"];
+const getShiftForDate = (dateStr) => {
+  const d = new Date(dateStr + "T00:00:00");
+  const diff = Math.round((d - SHIFT_REF_DATE) / 86400000);
+  return SHIFT_ORDER[((diff % 3) + 3) % 3];
+};
 
 const STATUS_COLORS = { open: "#22c55e", full: "#f59e0b", closed: "#8899aa", cancelled: "#ef4444" };
 const STATUS_LABELS = { open: "Open", full: "Full", closed: "Closed", cancelled: "Cancelled" };
@@ -499,7 +510,7 @@ function Auth({ onLogin, notify, theme, toggleTheme }) {
       </div>
       <div className="ls">Special Events Staffing — Birmingham Fire &amp; Rescue</div>
       <div className="at">
-        <button className={`atb${v === "login" ? " on" : ""}`} onClick={() => { setV("login"); setErr(""); }}>Sign In</button>
+        <button className={`atb${v === "login" ? " on" : ""}`} onClick={() => { setV("login"); setErr(""); }}>Clock In</button>
         <button className={`atb${v === "register" ? " on" : ""}`} onClick={() => { setV("register"); setRErr(""); }}>Register</button>
       </div>
       {v === "login" ? (<>
@@ -564,6 +575,7 @@ function useData() {
 
 // ─── EVENT STATUS BADGE ───────────────────────────────────────────────────────
 function StatusBadge({ status }) {
+function SignupBadge({status}){const s=SIGNUP_STATUS[status]||SIGNUP_STATUS.pending;return <span className={`bg ${s.cls}`}>{s.label}</span>;}
   return <span className="sts" style={{ background: `${STATUS_COLORS[status]}22`, color: STATUS_COLORS[status] }}>{STATUS_LABELS[status]}</span>;
 }
 
@@ -666,19 +678,19 @@ function CoordView({ profile, notify }) {
   // ── Attendance ──
   const coordSignIn = async (staffId, eventId) => {
     const exists = attendance.find(a => a.staff_id === staffId && a.event_id === eventId);
-    if (exists) { notify("Already signed in.", "error"); return; }
+    if (exists) { notify("Already clocked in.", "error"); return; }
     await supabase.from("attendance").insert({ staff_id: staffId, event_id: eventId, sign_in_time: nowISO() });
     const ac = profiles.find(p => p.id === staffId);
-    await logActivity("signed_in_staff", "attendance", eventId, { staffName: ac?.name });
-    notify("Signed in!"); refresh();
+    await logActivity("clocked_in_staff", "attendance", eventId, { staffName: ac?.name });
+    notify("Clocked in!"); refresh();
   };
   const coordSignOut = async (staffId, eventId) => {
     const rec = attendance.find(a => a.staff_id === staffId && a.event_id === eventId && !a.sign_out_time);
     if (!rec) return;
     await supabase.from("attendance").update({ sign_out_time: nowISO() }).eq("id", rec.id);
     const ac = profiles.find(p => p.id === staffId);
-    await logActivity("signed_out_staff", "attendance", eventId, { staffName: ac?.name });
-    notify("Signed out!"); refresh();
+    await logActivity("clocked_out_staff", "attendance", eventId, { staffName: ac?.name });
+    notify("Clocked out!"); refresh();
   };
   const coordRemoveSignup = async (staffId, eventId) => {
     await supabase.from("signups").delete().match({ staff_id: staffId, event_id: eventId });
@@ -686,6 +698,23 @@ function CoordView({ profile, notify }) {
     await logActivity("removed_signup", "signup", eventId, { staffName: ac?.name });
     notify("Signup removed."); refresh();
   };
+  const approveSignup = async (signupId) => {
+    const su = signups.find(s => s.id === signupId);
+    await supabase.from("signups").update({ status: "confirmed" }).eq("id", signupId);
+    const ac = profiles.find(p => p.id === su?.staff_id);
+    const ev = events.find(e => e.id === su?.event_id);
+    await logActivity("approved_signup", "signup", signupId, { staffName: ac?.name, eventName: ev?.name });
+    notify(`${ac?.name} approved for ${ev?.name}.`); refresh();
+  };
+  const denySignup = async (signupId) => {
+    const su = signups.find(s => s.id === signupId);
+    await supabase.from("signups").update({ status: "denied" }).eq("id", signupId);
+    const ac = profiles.find(p => p.id === su?.staff_id);
+    const ev = events.find(e => e.id === su?.event_id);
+    await logActivity("denied_signup", "signup", signupId, { staffName: ac?.name, eventName: ev?.name });
+    notify(`${ac?.name} denied for ${ev?.name}.`); refresh();
+  };
+  const pendingSignups = signups.filter(s => s.status === "pending");
 
   // ── Cancel requests ──
   const approveCR = async (crId) => {
@@ -773,7 +802,7 @@ function CoordView({ profile, notify }) {
   return (<>
     <div className="tabs">
       <button className={`tb${tab === "dash" ? " on" : ""}`} onClick={() => setTab("dash")}>Dashboard</button>
-      <button className={`tb${tab === "events" ? " on" : ""}`} onClick={() => setTab("events")}>Events</button>
+      <button className={`tb${tab === "events" ? " on" : ""}`} onClick={() => setTab("events")}>Events{pendingSignups.length>0&&<span className="nd or">{pendingSignups.length}</span>}</button>
       <button className={`tb${tab === "staff" ? " on" : ""}`} onClick={() => setTab("staff")}>Staff{pendingAccounts.length > 0 && <span className="nd or">{pendingAccounts.length}</span>}</button>
       <button className={`tb${tab === "att" ? " on" : ""}`} onClick={() => setTab("att")}>Attendance</button>
       <button className={`tb${tab === "cr" ? " on" : ""}`} onClick={() => setTab("cr")}>Cancel Reqs{pendingCR.length > 0 && <span className="nd or">{pendingCR.length}</span>}</button>
@@ -840,6 +869,7 @@ function CoordView({ profile, notify }) {
 
       {events.map(ev => {
         const es = signups.filter(s => s.event_id === ev.id && s.status === "confirmed");
+        const pendEv = signups.filter(s => s.event_id === ev.id && s.status === "pending");
         const pc = es.filter(s => { const p = profiles.find(x => x.id === s.staff_id); return p?.level === "Paramedic"; }).length;
         const ec = es.filter(s => { const p = profiles.find(x => x.id === s.staff_id); return p?.level === "EMT"; }).length;
         const att = attendance.filter(a => a.event_id === ev.id);
@@ -871,7 +901,7 @@ function CoordView({ profile, notify }) {
               <div className="evh">
                 <div>
                   <div className="evn">{ev.name} <StatusBadge status={ev.status} /></div>
-                  <div className="evm">{fmtDate(ev.date)} · {fmtTime(ev.time_start)} – {fmtTime(ev.time_end)}</div>
+                  <div className="evm">{fmtDate(ev.date)} · {fmtTime(ev.time_start)} – {fmtTime(ev.time_end)} · <span className="sts" style={{background:"rgba(167,139,250,.2)",color:"var(--p)"}}>Shift {getShiftForDate(ev.date)}</span></div>
                   {(ev.venue || ev.location) && <div className="loc">
                     {ev.venue && <span style={{ fontWeight: 500, color: "var(--t)" }}>{ev.venue}</span>}
                     {ev.venue && ev.location && " · "}
@@ -894,7 +924,22 @@ function CoordView({ profile, notify }) {
               </div>
               {selEv === ev.id && (
                 <div style={{ marginTop: 14 }}>
-                  <div className="dv" /><div className="sct">Signed-Up Staff</div>
+                  {pendEv.length > 0 && (
+                    <div className="pend-section">
+                      <div className="sct" style={{ color: "var(--o)" }}>⏳ Pending Approval ({pendEv.length})</div>
+                      {pendEv.map(s => {
+                        const ac = profiles.find(p => p.id === s.staff_id); if (!ac) return null;
+                        const onShift = getShiftForDate(ev.date) === ac.shift;
+                        return (
+                          <div className="srow" key={s.id}>
+                            <div><div className="sn">{ac.name} {onShift && <span style={{ color: "var(--o)", fontSize: 10 }}>⚠️ On shift {ac.shift}</span>}</div><div className="sme">{ac.level} · Shift {ac.shift} · {fmtDateTime(s.signed_up_at)}</div></div>
+                            <div style={{ display: "flex", gap: 4 }}><button className="bt bts btg" onClick={() => approveSignup(s.id)}>Approve</button><button className="bt bts btr" onClick={() => denySignup(s.id)}>Deny</button></div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="dv" /><div className="sct">Approved Staff ({es.length})</div>
                   {es.length === 0 && <div style={{ color: "var(--t2)", fontSize: 12 }}>None yet.</div>}
                   {es.map(s => {
                     const ac = profiles.find(p => p.id === s.staff_id); if (!ac) return null;
@@ -910,8 +955,8 @@ function CoordView({ profile, notify }) {
                           </div>}
                         </div>
                         <div style={{ display: "flex", gap: 4 }}>
-                          {!at2 && <button className="bt bts bta" onClick={() => coordSignIn(s.staff_id, ev.id)}>In</button>}
-                          {at2 && !at2.sign_out_time && <button className="bt bts btg" onClick={() => coordSignOut(s.staff_id, ev.id)}>Out</button>}
+                          {!at2 && <button className="bt bts bta" onClick={() => coordSignIn(s.staff_id, ev.id)}>Clock In</button>}
+                          {at2 && !at2.sign_out_time && <button className="bt bts btg" onClick={() => coordSignOut(s.staff_id, ev.id)}>Clock Out</button>}
                           <button className="bt bts btr" onClick={() => coordRemoveSignup(s.staff_id, ev.id)}>Remove</button>
                         </div>
                       </div>
@@ -975,7 +1020,7 @@ function CoordView({ profile, notify }) {
       </div>
       <button className="bt bp" style={{ marginBottom: 14 }} onClick={exportAttendance}>📥 Export CSV</button>
       <div className="cd"><table className="lt">
-        <thead><tr><th>Staff</th><th>Event</th><th>In</th><th>Out</th><th>Hrs</th></tr></thead>
+        <thead><tr><th>Staff</th><th>Event</th><th>Clock In</th><th>Clock Out</th><th>Hrs</th></tr></thead>
         <tbody>{attendance.map(a => {
           const ac = profiles.find(x => x.id === a.staff_id); const ev = events.find(x => x.id === a.event_id);
           return (<tr key={a.id}><td>{ac?.name || "?"}</td><td>{ev?.name || "?"}</td><td>{fmtDateTime(a.sign_in_time)}</td><td>{a.sign_out_time ? fmtDateTime(a.sign_out_time) : <span className="bg si">Active</span>}</td><td>{a.sign_out_time ? calcHours(a.sign_in_time, a.sign_out_time) + " hrs" : "—"}</td></tr>);
@@ -1124,7 +1169,7 @@ function StaffView({ profile, notify }) {
   const { profiles, events, signups, attendance, cancelReqs, loading, refresh } = useData();
   const [tab, setTab] = useState("events");
 
-  const mySignups = signups.filter(s => s.staff_id === profile.id && s.status === "confirmed");
+  const mySignups = signups.filter(s => s.staff_id === profile.id && (s.status === "confirmed" || s.status === "pending"));
   const myAtt = attendance.filter(a => a.staff_id === profile.id);
   const myCR = cancelReqs.filter(c => c.staff_id === profile.id);
   const myEventIds = mySignups.map(s => s.event_id);
@@ -1139,25 +1184,38 @@ function StaffView({ profile, notify }) {
     if (ev?.status !== "open") { notify("Event is not open for signups.", "error"); return; }
     if (mySignups.find(s => s.event_id === eventId)) { notify("Already signed up.", "error"); return; }
     if (mySignups.length >= SOFT_LIMIT) { notify(`Soft limit of ${SOFT_LIMIT} events reached.`, "warn"); }
-    const { error } = await supabase.from("signups").insert({ staff_id: profile.id, event_id: eventId, status: "confirmed", signed_up_at: nowISO() });
+    const { error } = await supabase.from("signups").insert({ staff_id: profile.id, event_id: eventId, status: "pending", signed_up_at: nowISO() });
     if (error) { notify(error.message, "error"); return; }
     await logActivity("signed_up", "signup", eventId, { eventName: ev?.name });
     sendNotification("event_signup", { staffName: profile.name, staffLevel: profile.level, eventName: ev?.name, eventDate: fmtDate(ev?.date) });
-    notify("Signed up!"); refresh();
+    notify("Signup request sent — awaiting approval."); refresh();
   };
 
   const cancelSignup = async (eventId) => {
-    const attRec = myAtt.find(a => a.event_id === eventId && a.sign_in_time);
-    const existingCR = myCR.find(c => c.event_id === eventId && c.status === "pending");
+    const mySU = mySignups.find(s => s.event_id === eventId);
+    if (!mySU) return;
     const ev = events.find(e => e.id === eventId);
+
+    // Pending → just withdraw
+    if (mySU.status === "pending") {
+      await supabase.from("signups").delete().eq("id", mySU.id);
+      await logActivity("withdrew_signup", "signup", eventId, { eventName: ev?.name });
+      notify("Signup withdrawn."); refresh(); return;
+    }
+
+    // Confirmed → check if clocked in
+    const attRec = myAtt.find(a => a.event_id === eventId && a.sign_in_time);
     if (attRec) {
+      // Clocked in → needs coordinator approval
+      const existingCR = myCR.find(c => c.event_id === eventId && c.status === "pending");
       if (existingCR) { notify("Cancel request already pending.", "warn"); return; }
       await supabase.from("cancel_requests").insert({ staff_id: profile.id, event_id: eventId, status: "pending", requested_at: nowISO() });
       await logActivity("requested_cancel", "cancel_request", eventId, { eventName: ev?.name });
       sendNotification("cancel_request", { staffName: profile.name, eventName: ev?.name });
       notify("Cancel request sent to coordinator.", "warn");
     } else {
-      await supabase.from("signups").delete().match({ staff_id: profile.id, event_id: eventId });
+      // Not clocked in → direct cancel
+      await supabase.from("signups").delete().eq("id", mySU.id);
       await logActivity("cancelled_signup", "signup", eventId, { eventName: ev?.name });
       notify("Signup cancelled.");
     }
@@ -1165,11 +1223,11 @@ function StaffView({ profile, notify }) {
   };
 
   const signIn = async (eventId) => {
-    if (myAtt.find(a => a.event_id === eventId)) { notify("Already signed in.", "error"); return; }
+    const myApproved = mySignups.find(s => s.event_id === eventId && s.status === "confirmed"); if (!myApproved) { notify("Not approved yet.", "error"); return; } if (myAtt.find(a => a.event_id === eventId)) { notify("Already clocked in.", "error"); return; }
     await supabase.from("attendance").insert({ staff_id: profile.id, event_id: eventId, sign_in_time: nowISO() });
     const ev = events.find(e => e.id === eventId);
-    await logActivity("signed_in", "attendance", eventId, { eventName: ev?.name });
-    notify("Signed in!"); refresh();
+    await logActivity("clocked_in", "attendance", eventId, { eventName: ev?.name });
+    notify("Clocked in!"); refresh();
   };
 
   const signOut = async (eventId) => {
@@ -1177,8 +1235,8 @@ function StaffView({ profile, notify }) {
     if (!rec) return;
     await supabase.from("attendance").update({ sign_out_time: nowISO() }).eq("id", rec.id);
     const ev = events.find(e => e.id === eventId);
-    await logActivity("signed_out", "attendance", eventId, { eventName: ev?.name });
-    notify("Signed out!"); refresh();
+    await logActivity("clocked_out", "attendance", eventId, { eventName: ev?.name });
+    notify("Clocked out!"); refresh();
   };
 
   if (loading) return <div className="ld"><div className="spinner" /><span style={{ fontSize: 12 }}>Loading...</span></div>;
@@ -1198,14 +1256,14 @@ function StaffView({ profile, notify }) {
     {tab === "events" && <>
       <div className="stw">
         <div className="stc"><div className="sv sa">{visibleEvents.length}</div><div className="svl">Events</div></div>
-        <div className="stc"><div className="sv sg">{mySignups.length}</div><div className="svl">Signed Up</div></div>
+        <div className="stc"><div className="sv so">{mySignups.filter(s=>s.status==="pending").length}</div><div className="svl">Pending</div></div><div className="stc"><div className="sv sg">{mySignups.filter(s=>s.status==="confirmed").length}</div><div className="svl">Approved</div></div>
         <div className="stc"><div className="sv sy">{myTotalHours.toFixed(1)}</div><div className="svl">My Hours</div></div>
       </div>
       {visibleEvents.map(ev => {
         const es = signups.filter(s => s.event_id === ev.id && s.status === "confirmed");
         const pc = es.filter(s => { const p = profiles.find(x => x.id === s.staff_id); return p?.level === "Paramedic"; }).length;
         const ec = es.filter(s => { const p = profiles.find(x => x.id === s.staff_id); return p?.level === "EMT"; }).length;
-        const isMine = myEventIds.includes(ev.id);
+        const myS = mySignups.find(s=>s.event_id===ev.id); const isMine = !!myS;
         const myAttRec = myAtt.find(a => a.event_id === ev.id);
         const canSignUp = ev.status === "open" && !isMine;
 
@@ -1213,8 +1271,8 @@ function StaffView({ profile, notify }) {
           <div className="evc" key={ev.id} style={isMine ? { borderColor: "var(--a)" } : {}}>
             <div className="evh">
               <div>
-                <div className="evn">{ev.name} <StatusBadge status={ev.status} /> {isMine && <span className="bg si" style={{ marginLeft: 4 }}>Signed Up</span>}</div>
-                <div className="evm">{fmtDate(ev.date)} · {fmtTime(ev.time_start)} – {fmtTime(ev.time_end)}</div>
+                <div className="evn">{ev.name} <StatusBadge status={ev.status} /> {isMine && <SignupBadge status={myS?.status || "pending"} />}</div>
+                <div className="evm">{fmtDate(ev.date)} · {fmtTime(ev.time_start)} – {fmtTime(ev.time_end)} · <span className="sts" style={{background:"rgba(167,139,250,.2)",color:"var(--p)"}}>Shift {getShiftForDate(ev.date)}</span></div>
                 {(ev.venue || ev.location) && <div className="loc">
                   {ev.venue && <span style={{ fontWeight: 500, color: "var(--t)" }}>{ev.venue}</span>}
                   {ev.venue && ev.location && " · "}
@@ -1223,12 +1281,13 @@ function StaffView({ profile, notify }) {
               </div>
               <div className="evb">
                 {canSignUp && <button className="bt bts bta" onClick={() => signUpForEvent(ev.id)}>Sign Up</button>}
-                {isMine && !myAttRec && <button className="bt bts btg" onClick={() => signIn(ev.id)}>Sign In</button>}
-                {isMine && myAttRec && !myAttRec.sign_out_time && <button className="bt bts bto" onClick={() => signOut(ev.id)}>Sign Out</button>}
-                {isMine && <button className="bt bts btr" onClick={() => cancelSignup(ev.id)}>Cancel</button>}
+                {myS?.status === "confirmed" && !myAttRec && <button className="bt bts btg" onClick={() => signIn(ev.id)}>Clock In</button>}
+                {isMine && myAttRec && !myAttRec.sign_out_time && <button className="bt bts bto" onClick={() => signOut(ev.id)}>Clock Out</button>}
+                {isMine && <button className="bt bts btr" onClick={() => cancelSignup(ev.id)}>{myS?.status === "pending" ? "Withdraw" : "Cancel"}</button>}
               </div>
             </div>
             {ev.notes && <div className="nts">📋 {ev.notes}</div>}
+            {getShiftForDate(ev.date) === profile.shift && <div className="shift-warn">⚠️ This event falls on your regular shift ({profile.shift}). {ev.time_start < "09:00" ? "Event starts before 0900 — you may arrive late from duty." : "You may need to leave regular duty for this event."}</div>}
             <div className="slb">
               <div className="sb"><div className="sl"><span>Medics</span><span>{pc}/{ev.needed_paramedics}</span></div><div className="st"><div className={`sf p${pc >= ev.needed_paramedics ? " fu" : ""}`} style={{ width: `${Math.min(100, (pc / (ev.needed_paramedics || 1)) * 100)}%` }} /></div></div>
               <div className="sb"><div className="sl"><span>EMT</span><span>{ec}/{ev.needed_emts}</span></div><div className="st"><div className={`sf e${ec >= ev.needed_emts ? " fu" : ""}`} style={{ width: `${Math.min(100, (ec / (ev.needed_emts || 1)) * 100)}%` }} /></div></div>
@@ -1249,12 +1308,14 @@ function StaffView({ profile, notify }) {
       {mySignups.map(s => {
         const ev = events.find(e => e.id === s.event_id); if (!ev) return null;
         const myAttRec = myAtt.find(a => a.event_id === ev.id);
+        const isApproved = s.status === "confirmed";
+        const isPending = s.status === "pending";
         return (
-          <div className="evc" key={s.id}>
+          <div className="evc" key={s.id} style={{ borderColor: isApproved ? "var(--g)" : "var(--o)" }}>
             <div className="evh">
               <div>
-                <div className="evn">{ev.name} <StatusBadge status={ev.status} /></div>
-                <div className="evm">{fmtDate(ev.date)} · {fmtTime(ev.time_start)} – {fmtTime(ev.time_end)}</div>
+                <div className="evn">{ev.name} <SignupBadge status={s.status} /></div>
+                <div className="evm">{fmtDate(ev.date)} · {fmtTime(ev.time_start)} – {fmtTime(ev.time_end)} · <span className="sts" style={{background:"rgba(167,139,250,.2)",color:"var(--p)"}}>Shift {getShiftForDate(ev.date)}</span></div>
                 {(ev.venue || ev.location) && <div className="loc">
                   {ev.venue && <span style={{ fontWeight: 500, color: "var(--t)" }}>{ev.venue}</span>}
                   {ev.venue && ev.location && " · "}
@@ -1262,12 +1323,13 @@ function StaffView({ profile, notify }) {
                 </div>}
               </div>
               <div className="evb">
-                {!myAttRec && <button className="bt bts btg" onClick={() => signIn(ev.id)}>Sign In</button>}
-                {myAttRec && !myAttRec.sign_out_time && <button className="bt bts bto" onClick={() => signOut(ev.id)}>Sign Out</button>}
-                <button className="bt bts btr" onClick={() => cancelSignup(ev.id)}>Cancel</button>
+                {isApproved && !myAttRec && <button className="bt bts btg" onClick={() => signIn(ev.id)}>Clock In</button>}
+                {isApproved && myAttRec && !myAttRec.sign_out_time && <button className="bt bts bto" onClick={() => signOut(ev.id)}>Clock Out</button>}
+                <button className="bt bts btr" onClick={() => cancelSignup(ev.id)}>{isPending ? "Withdraw" : "Cancel"}</button>
               </div>
             </div>
             {ev.notes && <div className="nts">📋 {ev.notes}</div>}
+            {getShiftForDate(ev.date) === profile.shift && <div className="shift-warn">⚠️ This event falls on your regular shift ({profile.shift}). {ev.time_start < "09:00" ? "Event starts before 0900 — you may arrive late from duty." : "You may need to leave regular duty for this event."}</div>}
             {myAttRec && (
               <div style={{ marginTop: 8, fontSize: 11, color: "var(--t2)", fontFamily: "'DM Mono', monospace" }}>
                 In: {fmtDateTime(myAttRec.sign_in_time)}{myAttRec.sign_out_time && ` · Out: ${fmtDateTime(myAttRec.sign_out_time)} · ${calcHours(myAttRec.sign_in_time, myAttRec.sign_out_time)} hrs`}
@@ -1286,7 +1348,7 @@ function StaffView({ profile, notify }) {
         <div className="stc"><div className="sv sy">{myAtt.filter(a => !a.sign_out_time).length}</div><div className="svl">Active</div></div>
       </div>
       <div className="cd"><table className="lt">
-        <thead><tr><th>Event</th><th>Date</th><th>In</th><th>Out</th><th>Hrs</th></tr></thead>
+        <thead><tr><th>Event</th><th>Date</th><th>Clock In</th><th>Clock Out</th><th>Hrs</th></tr></thead>
         <tbody>{myAtt.map(a => {
           const ev = events.find(x => x.id === a.event_id);
           return (<tr key={a.id}><td>{ev?.name || "?"}</td><td>{fmtDate(ev?.date)}</td><td>{fmtDateTime(a.sign_in_time)}</td><td>{a.sign_out_time ? fmtDateTime(a.sign_out_time) : <span className="bg si">Active</span>}</td><td>{a.sign_out_time ? calcHours(a.sign_in_time, a.sign_out_time) + " hrs" : "—"}</td></tr>);
