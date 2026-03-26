@@ -45,6 +45,18 @@ const findConflicts = (eventId, staffId, events, signups) => {
     return null;
   }).filter(Boolean);
 };
+// Shows ALL overlapping signups (pending + confirmed) for coordinator context
+const findAllOverlaps = (eventId, staffId, events, signups) => {
+  const ev = events.find(e => e.id === eventId);
+  if (!ev) return [];
+  const otherSignups = signups.filter(s => s.staff_id === staffId && (s.status === "confirmed" || s.status === "pending") && s.event_id !== eventId);
+  return otherSignups.map(s => {
+    const other = events.find(e => e.id === s.event_id);
+    if (!other) return null;
+    if (timesOverlap(ev.date, ev.time_start, ev.time_end, other.date, other.time_start, other.time_end)) return { ...other, signupStatus: s.status };
+    return null;
+  }).filter(Boolean);
+};
 const getShiftForDate = (dateStr) => {
   const d = new Date(dateStr + "T00:00:00");
   const diff = Math.round((d - SHIFT_REF_DATE) / 86400000);
@@ -957,13 +969,13 @@ function CoordView({ profile, notify }) {
                         const ac = profiles.find(p => p.id === s.staff_id); if (!ac) return null;
                         const onShift = getShiftForDate(ev.date) === ac.shift;
                         const gettingOff = getShiftForDate(ev.date) === NEXT_SHIFT[ac.shift];
-                        const conflicts = findConflicts(ev.id, s.staff_id, events, signups);
+                        const conflicts = findAllOverlaps(ev.id, s.staff_id, events, signups);
                         return (
                           <div className="srow" key={s.id}>
                             <div>
                               <div className="sn">{ac.name} {onShift && <span style={{ color: "var(--o)", fontSize: 10 }}>⚠️ On duty</span>}{gettingOff && <span style={{ color: "var(--a)", fontSize: 10 }}>ℹ️ Off 0800</span>}</div>
                               <div className="sme">{ac.level} · Shift {ac.shift} · {fmtDateTime(s.signed_up_at)}</div>
-                              {conflicts.length > 0 && <div style={{ color: "var(--r)", fontSize: 10, marginTop: 2 }}>🚫 Conflict: {conflicts.map(c => c.name).join(", ")}</div>}
+                              {conflicts.length > 0 && <div style={{ fontSize: 10, marginTop: 2 }}>{conflicts.map((c, i) => <span key={i} style={{ color: c.signupStatus === "confirmed" ? "var(--r)" : "var(--o)", marginRight: 6 }}>{c.signupStatus === "confirmed" ? "🚫" : "⚡"} {c.name} ({c.signupStatus})</span>)}</div>}
                             </div>
                             <div style={{ display: "flex", gap: 4 }}><button className="bt bts btg" onClick={() => approveSignup(s.id)}>Approve</button><button className="bt bts btr" onClick={() => denySignup(s.id)}>Deny</button></div>
                           </div>
@@ -1215,18 +1227,19 @@ function StaffView({ profile, notify }) {
     const ev = events.find(e => e.id === eventId);
     if (ev?.status !== "open") { notify("Event is not open for signups.", "error"); return; }
     if (mySignups.find(s => s.event_id === eventId)) { notify("Already signed up.", "error"); return; }
-    // Check for time conflicts with approved events
-    const conflicts = findConflicts(eventId, profile.id, events, signups);
-    if (conflicts.length > 0) {
-      notify(`Schedule conflict with: ${conflicts.map(c => c.name).join(", ")}. You're already approved for an event at this time.`, "error");
-      return;
-    }
     if (mySignups.filter(s => s.status === "confirmed").length >= SOFT_LIMIT) { notify(`Soft limit of ${SOFT_LIMIT} approved events reached.`, "warn"); }
+    // Check for overlapping approved events — warn but allow signup
+    const conflicts = findConflicts(eventId, profile.id, events, signups);
     const { error } = await supabase.from("signups").insert({ staff_id: profile.id, event_id: eventId, status: "pending", signed_up_at: nowISO() });
     if (error) { notify(error.message, "error"); return; }
     await logActivity("signed_up", "signup", eventId, { eventName: ev?.name });
     sendNotification("event_signup", { staffName: profile.name, staffLevel: profile.level, eventName: ev?.name, eventDate: fmtDate(ev?.date) });
-    notify("Signup request sent — awaiting approval."); refresh();
+    if (conflicts.length > 0) {
+      notify(`Signup sent! Note: overlaps with ${conflicts.map(c => c.name).join(", ")} — coordinator will decide.`, "warn");
+    } else {
+      notify("Signup request sent — awaiting approval.");
+    }
+    refresh();
   };
 
   const cancelSignup = async (eventId) => {
@@ -1305,13 +1318,13 @@ function StaffView({ profile, notify }) {
         const myAttRec = myAtt.find(a => a.event_id === ev.id);
         const conflicts = !isMine ? findConflicts(ev.id, profile.id, events, signups) : [];
         const hasConflict = conflicts.length > 0;
-        const canSignUp = ev.status === "open" && !isMine && !hasConflict;
+        const canSignUp = ev.status === "open" && !isMine;
 
         return (
           <div className="evc" key={ev.id} style={isMine ? { borderColor: myS?.status === "confirmed" ? "var(--g)" : "var(--o)" } : {}}>
             <div className="evh">
               <div>
-                <div className="evn">{ev.name} <StatusBadge status={ev.status} /> {isMine && <SignupBadge status={myS?.status || "pending"} />} {hasConflict && <span className="bg dn">🚫 Conflict</span>}</div>
+                <div className="evn">{ev.name} <StatusBadge status={ev.status} /> {isMine && <SignupBadge status={myS?.status || "pending"} />} {hasConflict && !isMine && <span className="bg so2">⚡ Overlap</span>}</div>
                 <div className="evm">{fmtDate(ev.date)} · {fmtTime(ev.time_start)} – {fmtTime(ev.time_end)} · <span className="sts" style={{background:"rgba(167,139,250,.2)",color:"var(--p)"}}>Shift {getShiftForDate(ev.date)}</span></div>
                 {(ev.venue || ev.location) && <div className="loc">
                   {ev.venue && <span style={{ fontWeight: 500, color: "var(--t)" }}>{ev.venue}</span>}
@@ -1328,7 +1341,7 @@ function StaffView({ profile, notify }) {
             </div>
             {ev.notes && <div className="nts">📋 {ev.notes}</div>}
             {(() => { const evShift = getShiftForDate(ev.date); const offDay = NEXT_SHIFT[profile.shift]; if (evShift === profile.shift) return <div className="shift-warn">⚠️ You'll be on regular duty (Shift {profile.shift}) this day. You may need to leave your shift for this event.</div>; if (evShift === offDay && ev.time_start < "08:00") return <div className="shift-warn">⚠️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts before 0800 — you may arrive late.</div>; if (evShift === offDay) return <div className="shift-warn" style={{borderColor:"rgba(0,212,255,.2)",color:"var(--a)"}}>ℹ️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts after your shift ends.</div>; return null; })()}
-            {hasConflict && <div className="shift-warn" style={{borderColor:"rgba(239,68,68,.2)",color:"var(--r)"}}>🚫 Schedule conflict with: {conflicts.map(c => c.name).join(", ")}. You cannot sign up for overlapping events.</div>}
+            {hasConflict && !isMine && <div className="shift-warn">⚡ Overlaps with: {conflicts.map(c => c.name).join(", ")}. You can still sign up — coordinator will decide which event to assign you.</div>}
             <div className="slb">
               <div className="sb"><div className="sl"><span>Medics</span><span>{pc}/{ev.needed_paramedics}</span></div><div className="st"><div className={`sf p${pc >= ev.needed_paramedics ? " fu" : ""}`} style={{ width: `${Math.min(100, (pc / (ev.needed_paramedics || 1)) * 100)}%` }} /></div></div>
               <div className="sb"><div className="sl"><span>EMT</span><span>{ec}/{ev.needed_emts}</span></div><div className="st"><div className={`sf e${ec >= ev.needed_emts ? " fu" : ""}`} style={{ width: `${Math.min(100, (ec / (ev.needed_emts || 1)) * 100)}%` }} /></div></div>
