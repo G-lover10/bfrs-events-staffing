@@ -189,7 +189,50 @@ body{background:var(--bg);color:var(--t);font-family:'DM Sans',sans-serif;min-he
 .ala{font-weight:500}.ald{color:var(--t2);font-size:11px;margin-top:2px}
 .dbr{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
 @media(max-width:600px){.fr,.fr3,.dbr{grid-template-columns:1fr}.hdr{flex-direction:column;align-items:flex-start}}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:900;padding:20px}
+.modal{background:var(--s);border:1px solid var(--bd);border-radius:16px;padding:24px;width:100%;max-width:380px}
+.modal .sct{margin-bottom:14px}
+.modal .close{position:absolute;top:12px;right:12px;background:none;border:none;color:var(--t2);font-size:18px;cursor:pointer}
+.promo-btn{background:none;border:1px solid var(--a);color:var(--a);padding:3px 8px;border-radius:4px;font-size:10px;cursor:pointer;font-family:'DM Mono',monospace}.promo-btn:hover{background:var(--a);color:var(--bg)}
+.demote-btn{background:none;border:1px solid var(--r);color:var(--r);padding:3px 8px;border-radius:4px;font-size:10px;cursor:pointer;font-family:'DM Mono',monospace}.demote-btn:hover{background:var(--r);color:#fff}
+.bulk-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
 `;
+
+// ─── CHANGE PASSWORD ──────────────────────────────────────────────────────────
+function ChangePassword({ onClose, notify }) {
+  const [curr, setCurr] = useState("");
+  const [newP, setNewP] = useState("");
+  const [conf, setConf] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    setErr(""); setBusy(true);
+    if (!newP || !conf) { setErr("All fields required."); setBusy(false); return; }
+    if (newP !== conf) { setErr("Passwords do not match."); setBusy(false); return; }
+    if (newP.length < 6) { setErr("Min 6 characters."); setBusy(false); return; }
+    const { error } = await supabase.auth.updateUser({ password: newP });
+    setBusy(false);
+    if (error) { setErr(error.message); return; }
+    notify("Password changed successfully.");
+    onClose();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <div className="sct">Change Password</div>
+        {err && <div className="err">{err}</div>}
+        <div className="fg"><label className="fl">New Password</label><input className="fi" type="password" value={newP} onChange={e => setNewP(e.target.value)} /></div>
+        <div className="fg"><label className="fl">Confirm New Password</label><input className="fi" type="password" value={conf} onChange={e => setConf(e.target.value)} onKeyDown={e => e.key === "Enter" && submit()} /></div>
+        <div className="pa" style={{ marginTop: 8 }}>
+          <button className="bt bta" onClick={submit} disabled={busy}>{busy ? "Saving..." : "Change Password"}</button>
+          <button className="bt bp" onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
@@ -197,6 +240,7 @@ export default function App() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notif, setNotif] = useState(null);
+  const [showPwModal, setShowPwModal] = useState(false);
   const notify = useCallback((msg, t = "ok") => { setNotif({ msg, t }); setTimeout(() => setNotif(null), 3200); }, []);
 
   useEffect(() => {
@@ -233,9 +277,11 @@ export default function App() {
               <div className="hdr-l"><div className="brand">BFRS <span>Events</span></div><span className="beta">BETA {APP_VERSION}</span></div>
               <div className="hdr-r">
                 <div className="pill">{profile.name}<span className={`rb${profile.role === "coordinator" ? " co" : ""}`}>{profile.role}</span></div>
+                <button className="lo" onClick={() => setShowPwModal(true)} style={{ borderColor: "var(--a)", color: "var(--a)" }}>🔑</button>
                 <button className="lo" onClick={handleLogout}>Logout</button>
               </div>
             </div>
+            {showPwModal && <ChangePassword onClose={() => setShowPwModal(false)} notify={notify} />}
             <main className="mn">
               {profile.role === "coordinator"
                 ? <CoordView profile={profile} notify={notify} />
@@ -388,11 +434,37 @@ function CoordView({ profile, notify }) {
     sendNotification("account_approved", { name: acc?.name, email: acc?.email });
     notify("Account approved."); refresh();
   };
+  const approveAll = async () => {
+    if (pendingAccounts.length === 0) return;
+    const ids = pendingAccounts.map(a => a.id);
+    const { error } = await supabase.from("profiles").update({ approved: true }).in("id", ids);
+    if (error) { notify(error.message, "error"); return; }
+    for (const acc of pendingAccounts) {
+      await logActivity("approved_account", "profile", acc.id, { name: acc.name });
+      sendNotification("account_approved", { name: acc.name, email: acc.email });
+    }
+    notify(`${pendingAccounts.length} accounts approved.`); refresh();
+  };
   const denyAccount = async (id) => {
     const acc = profiles.find(p => p.id === id);
     await logActivity("denied_account", "profile", id, { name: acc?.name });
     await supabase.from("profiles").delete().eq("id", id);
     notify("Account denied.", "error"); refresh();
+  };
+  const promoteToCoordinator = async (id) => {
+    const acc = profiles.find(p => p.id === id);
+    const { error } = await supabase.from("profiles").update({ role: "coordinator" }).eq("id", id);
+    if (error) { notify(error.message, "error"); return; }
+    await logActivity("promoted_to_coordinator", "profile", id, { name: acc?.name });
+    notify(`${acc?.name} promoted to coordinator.`); refresh();
+  };
+  const demoteToStaff = async (id) => {
+    if (id === profile.id) { notify("Can't demote yourself.", "error"); return; }
+    const acc = profiles.find(p => p.id === id);
+    const { error } = await supabase.from("profiles").update({ role: "staff" }).eq("id", id);
+    if (error) { notify(error.message, "error"); return; }
+    await logActivity("demoted_to_staff", "profile", id, { name: acc?.name });
+    notify(`${acc?.name} demoted to staff.`); refresh();
   };
 
   // ── Event actions ──
@@ -694,7 +766,10 @@ function CoordView({ profile, notify }) {
     {/* ── STAFF TAB ── */}
     {tab === "staff" && <>
       {pendingAccounts.length > 0 && <>
-        <div className="sct" style={{ color: "var(--y)" }}>Pending Approval</div>
+        <div className="sct" style={{ color: "var(--y)" }}>Pending Approval ({pendingAccounts.length})</div>
+        <div className="bulk-bar">
+          <button className="bt btg" onClick={approveAll}>✓ Approve All ({pendingAccounts.length})</button>
+        </div>
         {pendingAccounts.map(a => (
           <div className="pcd" key={a.id}>
             <div className="pcn">{a.name}</div>
@@ -709,9 +784,22 @@ function CoordView({ profile, notify }) {
       </>}
       <div className="sct">Active Staff ({profiles.filter(a => a.approved).length})</div>
       <div className="cd"><table className="lt">
-        <thead><tr><th>Name</th><th>Email</th><th>Level</th><th>Shift</th><th>Phone</th><th>Role</th></tr></thead>
+        <thead><tr><th>Name</th><th>Email</th><th>Level</th><th>Shift</th><th>Phone</th><th>Role</th><th>Actions</th></tr></thead>
         <tbody>{profiles.filter(a => a.approved).map(a => (
-          <tr key={a.id}><td style={{ fontWeight: 500 }}>{a.name}</td><td style={{ color: "var(--t2)" }}>{a.email}</td><td>{a.level || "—"}</td><td>{a.shift || "—"}</td><td style={{ color: "var(--t2)" }}>{a.phone || "—"}</td><td><span className={`rb${a.role === "coordinator" ? " co" : ""}`}>{a.role}</span></td></tr>
+          <tr key={a.id}>
+            <td style={{ fontWeight: 500 }}>{a.name}</td>
+            <td style={{ color: "var(--t2)" }}>{a.email}</td>
+            <td>{a.level || "—"}</td>
+            <td>{a.shift || "—"}</td>
+            <td style={{ color: "var(--t2)" }}>{a.phone || "—"}</td>
+            <td><span className={`rb${a.role === "coordinator" ? " co" : ""}`}>{a.role}</span></td>
+            <td>{a.role === "staff"
+              ? <button className="promo-btn" onClick={() => promoteToCoordinator(a.id)}>Promote</button>
+              : a.id !== profile.id
+                ? <button className="demote-btn" onClick={() => demoteToStaff(a.id)}>Demote</button>
+                : <span style={{ color: "var(--t2)", fontSize: 10 }}>You</span>
+            }</td>
+          </tr>
         ))}</tbody>
       </table></div>
     </>}
