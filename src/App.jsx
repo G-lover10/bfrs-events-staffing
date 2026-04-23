@@ -92,6 +92,10 @@ const EMAIL_TEMPLATES = {
     subject: `${d.decision === "approved" ? "✅" : "❌"} Withdrawal ${d.decision} — ${d.staffName}`,
     html: `<p>The withdrawal request from <b>${d.staffName}</b> for <b>${d.eventName}</b> has been <b>${d.decision}</b>.</p>`
   }),
+  open_slot: d => ({
+    subject: `🚨 Open Slot — ${d.eventName} on ${d.eventDate}`,
+    html: `<h2>A slot just opened up!</h2><p><b>${d.eventName}</b> on ${d.eventDate} from ${d.timeStart} to ${d.timeEnd} has an open spot.</p><p>Log in to the app to sign up. Coordinator makes final approval.</p><p><a href="https://bfrs-events-staffing.netlify.app">Open BFRS Events App →</a></p>`
+  }),
   overlap_alert: d => ({
     subject: `⚠️ Time Conflict — ${d.staffName} on ${d.eventDate}`,
     html: `<p><b>Cannot approve ${d.staffName}</b> for <b>${d.newEvent}</b>.</p><p>They are already confirmed for <b>${d.existingEvent}</b> (${d.existingTime}) which overlaps on ${d.eventDate}.</p>`
@@ -359,6 +363,7 @@ body{background:var(--bg);color:var(--t);font-family:'DM Sans',sans-serif;min-he
 .fab-group{position:fixed;bottom:20px;left:16px;display:flex;flex-direction:column;align-items:center;gap:8px;z-index:800}.fab-label{font-size:9px;color:var(--t2);text-transform:uppercase;letter-spacing:1px;font-family:'DM Mono',monospace;text-align:center}.fb-fab{width:44px;height:44px;border-radius:22px;background:var(--a);color:var(--bg);border:none;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.3);transition:transform .2s}.fb-fab:hover{transform:scale(1.1)}.help-fab{width:44px;height:44px;border-radius:22px;background:var(--g);color:var(--bg);border:none;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.3);transition:transform .2s}.help-fab:hover{transform:scale(1.1)}
 .fb-type{display:flex;gap:6px;margin-bottom:14px}.fb-type button{flex:1;padding:8px;border-radius:8px;border:1px solid var(--bd);background:var(--s2);color:var(--t2);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif}.fb-type button.act{border-color:var(--a);color:var(--a);background:rgba(0,212,255,.1)}
 .fb-item{background:var(--s);border:1px solid var(--bd);border-radius:10px;padding:12px;margin-bottom:8px}
+.slot-badge{background:rgba(239,68,68,.15);color:var(--r);border:1px solid var(--r);border-radius:6px;padding:2px 8px;font-size:10px;font-family:'DM Mono',monospace;animation:pulse 1.5s infinite}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 .fb-meta{font-size:10px;color:var(--t2);font-family:'DM Mono',monospace;margin-top:6px;display:flex;justify-content:space-between;align-items:center}
 .chat-window{position:fixed;bottom:80px;left:16px;width:320px;max-height:480px;background:var(--s);border:1px solid var(--bd);border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.4);z-index:900;display:flex;flex-direction:column;overflow:hidden}
 .chat-header{padding:12px 14px;border-bottom:1px solid var(--bd);font-weight:600;font-size:13px;display:flex;justify-content:space-between;align-items:center}
@@ -1066,7 +1071,16 @@ function CoordView({ profile, notify }) {
     const ev = events.find(e => e.id === cr.event_id);
     await logActivity("approved_cancel", "cancel_request", crId, { staffName: ac?.name, eventName: ev?.name });
     sendNotification("cancel_decision", { staffEmail: ac?.email, staffName: ac?.name, eventName: ev?.name, decision: "approved" });
-    notify("Cancel approved."); refresh();
+    // Log open slot so staff see in-app alert
+    await logActivity("slot_opened", "event", ev?.id, { eventName: ev?.name, eventDate: ev?.date, timeStart: ev?.time_start, timeEnd: ev?.time_end });
+    // Email blast to all approved staff not already signed up
+    const eligibleStaff = profiles.filter(p => p.approved && p.role === "staff" && p.id !== cr.staff_id);
+    const alreadySigned = signups.filter(s => s.event_id === ev?.id).map(s => s.staff_id);
+    const toNotify = eligibleStaff.filter(p => !alreadySigned.includes(p.id) && p.email);
+    if (toNotify.length > 0 && ev) {
+      sendNotification("open_slot", { eventName: ev.name, eventDate: fmtDate(ev.date), timeStart: fmtTime(ev.time_start), timeEnd: fmtTime(ev.time_end) });
+    }
+    notify(`Cancel approved. ${toNotify.length} staff notified of open slot.`); refresh();
   };
   const denyCR = async (crId) => {
     const cr = cancelReqs.find(c => c.id === crId);
@@ -1577,10 +1591,18 @@ function CoordView({ profile, notify }) {
   </>);
 }
 function StaffView({ profile, notify }) {
-  const { profiles, events, signups, attendance, cancelReqs, loading, refresh } = useData();
+  const { profiles, events, signups, attendance, cancelReqs, activityLog, loading, refresh } = useData();
   const [tab, setTab] = useState("events");
 
   const mySignups = signups.filter(s => s.staff_id === profile.id && (s.status === "confirmed" || s.status === "pending"));
+  // Open slot alerts — events with a slot opened in last 24hrs that I haven't signed up for
+  const recentSlots = useMemo(() => {
+    const yesterday = new Date(Date.now() - 86400000).toISOString();
+    return activityLog
+      .filter(a => a.action === "slot_opened" && a.created_at > yesterday)
+      .map(a => a.record_id)
+      .filter(evId => !mySignups.find(s => s.event_id === evId));
+  }, [activityLog, mySignups]);
   const myAtt = attendance.filter(a => a.staff_id === profile.id);
   const myCR = cancelReqs.filter(c => c.staff_id === profile.id);
   const myEventIds = mySignups.map(s => s.event_id);
@@ -1682,7 +1704,7 @@ function StaffView({ profile, notify }) {
           <div className="evc" key={ev.id} style={isMine ? { borderColor: myS?.status === "confirmed" ? "var(--g)" : "var(--o)" } : {}}>
             <div className="evh">
               <div>
-                <div className="evn">{ev.name} <StatusBadge status={ev.status} /> {isMine && <SignupBadge status={myS?.status || "pending"} />} {isMine && myCR.find(c => c.event_id === ev.id && c.status === "pending") && <span className="bg so2">⏳ Withdrawal Pending</span>} {hasConflict && !isMine && <span className="bg so2">⚡ Overlap</span>}</div>
+                <div className="evn">{ev.name} <StatusBadge status={ev.status} /> {isMine && <SignupBadge status={myS?.status || "pending"} />} {isMine && myCR.find(c => c.event_id === ev.id && c.status === "pending") && <span className="bg so2">⏳ Withdrawal Pending</span>} {!isMine && recentSlots.includes(ev.id) && <span className="slot-badge">🚨 Open Slot!</span>} {hasConflict && !isMine && <span className="bg so2">⚡ Overlap</span>}</div>
                 <div className="evm">{fmtDate(ev.date)} · {fmtTime(ev.time_start)} – {fmtTime(ev.time_end)} · <span className="sts" style={{background:"rgba(167,139,250,.2)",color:"var(--p)"}}>Shift {getShiftForDate(ev.date)}</span></div>
                 {(ev.venue || ev.location) && <div className="loc">
                   {ev.venue && <span style={{ fontWeight: 500, color: "var(--t)" }}>{ev.venue}</span>}
