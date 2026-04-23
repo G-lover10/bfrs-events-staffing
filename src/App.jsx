@@ -467,10 +467,10 @@ function FeedbackModal({ onClose, notify, userId, userName }) {
 
     // AI review in background
     try {
-      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      const res = await fetch("/.netlify/functions/chatbot", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${GROQ_KEY}` },
-        body: JSON.stringify({ model: "llama3-8b-8192", max_tokens: 300, messages: [{ role: "user", content: AI_REVIEW_PROMPT(type, msg.trim()) }] })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ system: "You are an AI that reviews app feedback. Always respond with valid JSON only.", messages: [{ role: "user", content: AI_REVIEW_PROMPT(type, msg.trim()) }] })
       });
       const aiData = await res.json();
       const rawText = aiData.choices?.[0]?.message?.content || "{}";
@@ -539,10 +539,10 @@ function HelpChat({ onClose }) {
     setBusy(true);
     try {
       const history = messages.filter(m => m.role !== "bot" || messages.indexOf(m) > 0).map(m => ({ role: m.role === "user" ? "user" : "assistant", content: m.text }));
-      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      const res = await fetch("/.netlify/functions/chatbot", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${GROQ_KEY}` },
-        body: JSON.stringify({ model: "llama3-8b-8192", max_tokens: 400, messages: [{ role: "system", content: HELP_SYSTEM_PROMPT }, ...history, { role: "user", content: q }] })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ system: HELP_SYSTEM_PROMPT, messages: [...history, { role: "user", content: q }] })
       });
       const data = await res.json();
       const answer = data.choices?.[0]?.message?.content || "Sorry, I couldn't get a response. Try again.";
@@ -818,6 +818,19 @@ function useData() {
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => { refresh(); }, 30000);
+    return () => clearInterval(interval);
+  }, [refresh]);
+
+  // Refresh immediately when app comes back to foreground
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === "visible") refresh(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [refresh]);
 
   return { profiles, events, signups, attendance, cancelReqs, activityLog, feedback, loading, refresh };
 }
