@@ -1073,14 +1073,22 @@ function CoordView({ profile, notify }) {
     sendNotification("cancel_decision", { staffEmail: ac?.email, staffName: ac?.name, eventName: ev?.name, decision: "approved" });
     // Log open slot so staff see in-app alert
     await logActivity("slot_opened", "event", ev?.id, { eventName: ev?.name, eventDate: ev?.date, timeStart: ev?.time_start, timeEnd: ev?.time_end });
-    // Email blast to all approved staff not already signed up
-    const eligibleStaff = profiles.filter(p => p.approved && p.role === "staff" && p.id !== cr.staff_id);
-    const alreadySigned = signups.filter(s => s.event_id === ev?.id).map(s => s.staff_id);
-    const toNotify = eligibleStaff.filter(p => !alreadySigned.includes(p.id) && p.email);
+    // Blast — prioritize staff already signed up (pending/denied) then all other eligible staff
+    const alreadyConfirmed = signups.filter(s => s.event_id === ev?.id && s.status === "confirmed").map(s => s.staff_id);
+    // People who signed up but weren't confirmed — they want this slot most
+    const interestedStaff = profiles.filter(p => {
+      const theirSignup = signups.find(s => s.event_id === ev?.id && s.staff_id === p.id && (s.status === "pending" || s.status === "denied"));
+      return theirSignup && p.email;
+    });
+    // Other eligible staff who haven't signed up at all
+    const allSignedUpIds = signups.filter(s => s.event_id === ev?.id).map(s => s.staff_id);
+    const otherStaff = profiles.filter(p => p.approved && p.role === "staff" && p.id !== cr.staff_id && !allSignedUpIds.includes(p.id) && p.email);
+    const toNotify = [...interestedStaff, ...otherStaff];
     if (toNotify.length > 0 && ev) {
       sendNotification("open_slot", { eventName: ev.name, eventDate: fmtDate(ev.date), timeStart: fmtTime(ev.time_start), timeEnd: fmtTime(ev.time_end) });
     }
-    notify(`Cancel approved. ${toNotify.length} staff notified of open slot.`); refresh();
+    const interestedCount = interestedStaff.length;
+    notify(`Cancel approved. Notified ${interestedCount} interested + ${otherStaff.length} other staff of open slot.`); refresh();
   };
   const denyCR = async (crId) => {
     const cr = cancelReqs.find(c => c.id === crId);
@@ -1673,7 +1681,18 @@ function StaffView({ profile, notify }) {
   if (loading) return <div className="ld"><div className="spinner" /><span style={{ fontSize: 12 }}>Loading...</span></div>;
 
   // Only show events that aren't cancelled for staff
-  const visibleEvents = events.filter(e => e.status !== "cancelled");
+  const visibleEvents = events.filter(e => {
+    if (e.status === "cancelled") return false;
+    // Always show events the staff member has signed up for
+    if (mySignups.find(s => s.event_id === e.id)) return true;
+    // Hide full events (all slots filled) unless there's an open slot alert
+    const confirmed = signups.filter(s => s.event_id === e.id && s.status === "confirmed");
+    const pc = confirmed.filter(s => { const p = profiles.find(x => x.id === s.staff_id); return p?.level === "Paramedic"; }).length;
+    const ec = confirmed.filter(s => { const p = profiles.find(x => x.id === s.staff_id); return p?.level === "EMT"; }).length;
+    const isFull = pc >= (e.needed_paramedics || 0) && ec >= (e.needed_emts || 0);
+    if (isFull && !recentSlots.includes(e.id)) return false;
+    return true;
+  });
 
   return (<>
     <div className="tabs">
