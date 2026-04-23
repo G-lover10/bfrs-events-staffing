@@ -18,7 +18,7 @@ exports.handler = async (event) => {
         "Authorization": `Bearer ${process.env.RESEND_KEY}`
       },
       body: JSON.stringify({
-        from: "BFRS Events <onboarding@resend.dev>",
+        from: "BFRS Events <alerts@grabcalls.com>",
         to: payload.to,
         subject: payload.subject,
         html: payload.html

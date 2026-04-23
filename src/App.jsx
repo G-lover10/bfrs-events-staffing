@@ -69,7 +69,7 @@ const STATUS_LABELS = { open: "Open", full: "Full", closed: "Closed", cancelled:
 // ─── EMAIL NOTIFICATION ──────────────────────────────────────────────────────
 const EMAIL_ENABLED = true;
 const RESEND_API_KEY = import.meta.env.VITE_RESEND_KEY || "";
-const COORDINATOR_EMAILS = ["medicglover@gmail.com"];
+const COORDINATOR_EMAILS = ["saleen_190@yahoo.com", "grabcalls@gmail.com", "medicglover@gmail.com"];
 
 const EMAIL_TEMPLATES = {
   new_registration: d => ({
