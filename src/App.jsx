@@ -67,17 +67,46 @@ const STATUS_COLORS = { open: "#22c55e", full: "#f59e0b", closed: "#8899aa", can
 const STATUS_LABELS = { open: "Open", full: "Full", closed: "Closed", cancelled: "Cancelled" };
 
 // ─── EMAIL NOTIFICATION ──────────────────────────────────────────────────────
-// Set to true when ready to go live with emails
-const EMAIL_ENABLED = false;
-// Fire-and-forget: doesn't block UI. Silently fails if edge function not set up.
+const EMAIL_ENABLED = true;
+const RESEND_API_KEY = import.meta.env.VITE_RESEND_KEY || "";
+const COORDINATOR_EMAILS = ["saleen_190@yahoo.com", "grabcalls@gmail.com"];
+
+const EMAIL_TEMPLATES = {
+  new_registration: d => ({
+    subject: `🔔 New Staff Registration — ${d.name}`,
+    html: `<p><b>${d.name}</b> has registered and is pending approval.</p><p>Level: ${d.level} | Shift: ${d.shift} | Phone: ${d.phone}</p><p>Log in to the app to approve or deny.</p>`
+  }),
+  account_approved: d => ({
+    subject: `✅ Account Approved — ${d.name}`,
+    html: `<p><b>${d.name}</b>'s account has been approved. They can now log in.</p>`
+  }),
+  event_signup: d => ({
+    subject: `📋 New Signup — ${d.eventName}`,
+    html: `<p><b>${d.staffName}</b> (${d.staffLevel}) signed up for <b>${d.eventName}</b> on ${d.eventDate}.</p>`
+  }),
+  cancel_request: d => ({
+    subject: `⚠️ Withdrawal Request — ${d.staffName}`,
+    html: `<p><b>${d.staffName}</b> has requested to withdraw from <b>${d.eventName}</b>.</p><p>Log in to the app to approve or deny the withdrawal.</p>`
+  }),
+  cancel_decision: d => ({
+    subject: `${d.decision === "approved" ? "✅" : "❌"} Withdrawal ${d.decision} — ${d.staffName}`,
+    html: `<p>The withdrawal request from <b>${d.staffName}</b> for <b>${d.eventName}</b> has been <b>${d.decision}</b>.</p>`
+  }),
+  overlap_alert: d => ({
+    subject: `⚠️ Time Conflict — ${d.staffName} on ${d.eventDate}`,
+    html: `<p><b>Cannot approve ${d.staffName}</b> for <b>${d.newEvent}</b>.</p><p>They are already confirmed for <b>${d.existingEvent}</b> (${d.existingTime}) which overlaps on ${d.eventDate}.</p>`
+  }),
+};
+
 const sendNotification = async (type, data) => {
   if (!EMAIL_ENABLED) return;
   try {
-    const fnUrl = `${SUPABASE_URL}/functions/v1/notify-email`;
-    await fetch(fnUrl, {
+    const tpl = EMAIL_TEMPLATES[type]?.(data);
+    if (!tpl) return;
+    await fetch("/.netlify/functions/send-email", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_ANON_KEY}` },
-      body: JSON.stringify({ type, data }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to: COORDINATOR_EMAILS, subject: tpl.subject, html: tpl.html }),
     });
   } catch (e) { /* silent — email is optional */ }
 };
@@ -327,14 +356,105 @@ body{background:var(--bg);color:var(--t);font-family:'DM Sans',sans-serif;min-he
 .promo-btn{background:none;border:1px solid var(--a);color:var(--a);padding:3px 8px;border-radius:4px;font-size:10px;cursor:pointer;font-family:'DM Mono',monospace}.promo-btn:hover{background:var(--a);color:var(--bg)}
 .demote-btn{background:none;border:1px solid var(--r);color:var(--r);padding:3px 8px;border-radius:4px;font-size:10px;cursor:pointer;font-family:'DM Mono',monospace}.demote-btn:hover{background:var(--r);color:#fff}
 .bulk-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
-.fb-fab{position:fixed;bottom:20px;left:20px;width:44px;height:44px;border-radius:22px;background:var(--a);color:var(--bg);border:none;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.3);z-index:800;transition:transform .2s}.fb-fab:hover{transform:scale(1.1)}
+.fab-group{position:fixed;bottom:20px;left:16px;display:flex;flex-direction:column;align-items:center;gap:8px;z-index:800}.fab-label{font-size:9px;color:var(--t2);text-transform:uppercase;letter-spacing:1px;font-family:'DM Mono',monospace;text-align:center}.fb-fab{width:44px;height:44px;border-radius:22px;background:var(--a);color:var(--bg);border:none;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.3);transition:transform .2s}.fb-fab:hover{transform:scale(1.1)}.help-fab{width:44px;height:44px;border-radius:22px;background:var(--g);color:var(--bg);border:none;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.3);transition:transform .2s}.help-fab:hover{transform:scale(1.1)}
 .fb-type{display:flex;gap:6px;margin-bottom:14px}.fb-type button{flex:1;padding:8px;border-radius:8px;border:1px solid var(--bd);background:var(--s2);color:var(--t2);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif}.fb-type button.act{border-color:var(--a);color:var(--a);background:rgba(0,212,255,.1)}
 .fb-item{background:var(--s);border:1px solid var(--bd);border-radius:10px;padding:12px;margin-bottom:8px}
 .fb-meta{font-size:10px;color:var(--t2);font-family:'DM Mono',monospace;margin-top:6px;display:flex;justify-content:space-between;align-items:center}
+.chat-window{position:fixed;bottom:80px;left:16px;width:320px;max-height:480px;background:var(--s);border:1px solid var(--bd);border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.4);z-index:900;display:flex;flex-direction:column;overflow:hidden}
+.chat-header{padding:12px 14px;border-bottom:1px solid var(--bd);font-weight:600;font-size:13px;display:flex;justify-content:space-between;align-items:center}
+.chat-msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;max-height:340px}
+.chat-msg{max-width:85%;padding:8px 12px;border-radius:12px;font-size:12px;line-height:1.5}
+.chat-msg.user{align-self:flex-end;background:var(--a);color:var(--bg);border-bottom-right-radius:4px}
+.chat-msg.bot{align-self:flex-start;background:var(--s2);color:var(--t);border-bottom-left-radius:4px}
+.chat-input-row{display:flex;gap:6px;padding:10px;border-top:1px solid var(--bd)}
+.chat-input-row input{flex:1;background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:8px 10px;color:var(--t);font-size:12px;font-family:'DM Sans',sans-serif}
+.chat-input-row button{background:var(--a);color:var(--bg);border:none;border-radius:8px;padding:8px 12px;cursor:pointer;font-size:13px}
 `;
 
 // ─── FEEDBACK MODAL ───────────────────────────────────────────────────────────
-function FeedbackModal({ onClose, notify, userId }) {
+const GROQ_KEY = import.meta.env.VITE_GROQ_KEY || "";
+
+const AI_REVIEW_PROMPT = (type, message) => `You are reviewing feedback submitted to the BFRS Special Events Staffing app used by Birmingham Fire & Rescue Service. 
+
+Feedback type: ${type}
+Message: "${message}"
+
+Assess this feedback and respond in JSON only (no markdown):
+{
+  "worthy": true or false,
+  "category": "bug" | "feature" | "improvement" | "noise",
+  "priority": "high" | "medium" | "low",
+  "summary": "one sentence summary",
+  "recommendation": "what you recommend doing about this"
+}
+
+"worthy" means it deserves attention from the coordinator/developer. Mark noise, spam, or vague complaints as false.`;
+
+const HELP_SYSTEM_PROMPT = `You are a helpful assistant for the BFRS Special Events Staffing app used by Birmingham Fire & Rescue Service in Alabama. Your job is to help coordinators and staff understand how to use the app. Be friendly, clear, and concise.
+
+Here is how the app works:
+
+ROLES:
+- Staff (EMT or Paramedic): Can sign up for events, view their status, clock in/out, and submit withdrawal requests.
+- Coordinator: Full access — create/manage events, approve or deny staff signups, manage accounts, view attendance, export reports, and see all pending actions on the dashboard.
+
+REGISTRATION & LOGIN:
+- New staff register with their name, email, shift (A/B/C/Days), level (EMT or Paramedic), phone number, and Kelly Day number (1-9, ask your supervisor).
+- After registering, accounts are PENDING until a coordinator approves them in the Staff tab.
+- Once approved, staff can log in and use the app.
+
+EVENTS:
+- Coordinators create events with a name, date, start/end time, location, and how many Paramedics and EMTs are needed.
+- Events have statuses: Open (accepting signups), Closed, or Cancelled.
+- Staff browse open events and tap "Sign Up" to request a spot.
+
+SIGNING UP FOR EVENTS:
+- Signing up sends a pending request — it is NOT guaranteed. A coordinator must approve it.
+- Staff can sign up for multiple events even on the same day. The app will warn about shift conflicts but allows it — the coordinator decides who gets assigned.
+- If you are on regular duty that day, the app shows a warning so you are aware.
+- Kelly Day warnings also appear if the event falls on your Kelly day.
+
+COORDINATOR APPROVAL WORKFLOW:
+- Coordinators open an event and tap "Manage" to see all pending signups.
+- The app RECOMMENDS who to approve using a star (⭐) system based on: credential match, not on regular duty, fewest events that month, and signup time.
+- Stars are suggestions only — coordinators make the final call.
+- IMPORTANT: If a staff member is already confirmed for an overlapping event on the same day, the app will BLOCK approval and show an error. This prevents double-booking.
+
+WITHDRAWAL REQUESTS:
+- If a confirmed staff member needs to cancel, they tap "Cancel" on the event. This sends a withdrawal request — it does NOT immediately remove them.
+- The coordinator sees the request in the Cancel Reqs tab and must approve or deny it.
+- If approved, the slot opens back up for other staff.
+- Staff see a "⏳ Withdrawal Pending" badge while waiting.
+
+ATTENDANCE (CLOCK IN/OUT):
+- On event day, confirmed staff tap "Clock In" when they arrive and "Clock Out" when they leave.
+- Hours are tracked automatically and shown in the leaderboard on the dashboard.
+
+DASHBOARD (Coordinators only):
+- Shows pending accounts, pending signups, and withdrawal requests as clickable cards.
+- Tap any pending card to jump directly to that section.
+- The Pending Actions panel lists every item needing attention with a Review button.
+
+KELLY DAYS:
+- Every 9 shifts (27 days), staff get a Kelly day off.
+- Each staff member has a Kelly number (1-9) set during registration.
+- If an event falls on your Kelly day, the app shows a warning.
+- Exception: If a Kelly day falls on a payday Friday, that Kelly day is skipped.
+
+SHIFT ROTATION:
+- Birmingham Fire & Rescue works 24 hours on, 48 hours off.
+- Shifts rotate A → B → C.
+- The app detects which shift is working on any event date and warns staff accordingly.
+
+FEEDBACK:
+- Use the 💬 Feedback button (bottom left) to report bugs, suggest ideas, or leave comments.
+- All feedback is reviewed and sent to Chief Hendon.
+
+If someone asks about ideas or improvements, let them know their suggestion will be forwarded to Chief Clay Hendon who oversees special events, and that all ideas are appreciated and taken seriously.
+
+If you don't know something specific about their situation, encourage them to reach out to their coordinator directly.`;
+
+function FeedbackModal({ onClose, notify, userId, userName }) {
   const [type, setType] = useState("idea");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
@@ -343,9 +463,41 @@ function FeedbackModal({ onClose, notify, userId }) {
     if (!msg.trim()) { notify("Please enter a message.", "error"); return; }
     setBusy(true);
     const { error } = await supabase.from("feedback").insert({ user_id: userId, type, message: msg.trim() });
+    if (error) { setBusy(false); notify(error.message, "error"); return; }
+
+    // AI review in background
+    try {
+      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${GROQ_KEY}` },
+        body: JSON.stringify({ model: "llama3-8b-8192", max_tokens: 300, messages: [{ role: "user", content: AI_REVIEW_PROMPT(type, msg.trim()) }] })
+      });
+      const aiData = await res.json();
+      const rawText = aiData.choices?.[0]?.message?.content || "{}";
+      const review = JSON.parse(rawText.replace(/```json|```/g, "").trim());
+
+      // Email coordinators with AI assessment
+      const emailHtml = `
+        <h3>New ${type} Feedback from ${userName || "a staff member"}</h3>
+        <p><b>Message:</b> ${msg.trim()}</p>
+        <hr/>
+        <h4>🤖 AI Assessment</h4>
+        <p><b>Category:</b> ${review.category} &nbsp;|&nbsp; <b>Priority:</b> ${review.priority}</p>
+        <p><b>Summary:</b> ${review.summary}</p>
+        <p><b>Recommendation:</b> ${review.recommendation}</p>
+        ${review.worthy ? '<p style="color:green"><b>✅ Marked as worthy of review</b></p>' : '<p style="color:gray">ℹ️ AI flagged as low priority / noise</p>'}
+      `;
+      if (review.worthy) {
+        await fetch("/.netlify/functions/send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ to: COORDINATOR_EMAILS, subject: `[${review.priority.toUpperCase()}] ${type} Feedback — ${review.summary}`, html: emailHtml })
+        });
+      }
+    } catch(e) { /* silent — review is optional */ }
+
     setBusy(false);
-    if (error) { notify(error.message, "error"); return; }
-    notify("Feedback submitted — thank you!");
+    notify("Feedback submitted — thank you! Chief Hendon has been notified.");
     onClose();
   };
 
@@ -353,6 +505,7 @@ function FeedbackModal({ onClose, notify, userId }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="sct">Send Feedback</div>
+        <div style={{ fontSize: 11, color: "var(--t2)", marginBottom: 12 }}>Report a bug, share an idea, or leave a comment. All feedback goes directly to Chief Hendon.</div>
         <div className="fb-type">
           <button className={type === "bug" ? "act" : ""} onClick={() => setType("bug")}>🐛 Bug</button>
           <button className={type === "idea" ? "act" : ""} onClick={() => setType("idea")}>💡 Idea</button>
@@ -365,6 +518,55 @@ function FeedbackModal({ onClose, notify, userId }) {
           <button className="bt bta" onClick={submit} disabled={busy}>{busy ? "Sending..." : "Submit"}</button>
           <button className="bt bp" onClick={onClose}>Cancel</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function HelpChat({ onClose }) {
+  const [messages, setMessages] = useState([{ role: "bot", text: "Hi! I'm the BFRS App Assistant. Ask me anything about how the app works — signing up for events, approvals, Kelly days, attendance, or anything else." }]);
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const bottomRef = useRef(null);
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
+  const send = async () => {
+    const q = input.trim();
+    if (!q || busy) return;
+    setInput("");
+    setMessages(m => [...m, { role: "user", text: q }]);
+    setBusy(true);
+    try {
+      const history = messages.filter(m => m.role !== "bot" || messages.indexOf(m) > 0).map(m => ({ role: m.role === "user" ? "user" : "assistant", content: m.text }));
+      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${GROQ_KEY}` },
+        body: JSON.stringify({ model: "llama3-8b-8192", max_tokens: 400, messages: [{ role: "system", content: HELP_SYSTEM_PROMPT }, ...history, { role: "user", content: q }] })
+      });
+      const data = await res.json();
+      const answer = data.choices?.[0]?.message?.content || "Sorry, I couldn't get a response. Try again.";
+      setMessages(m => [...m, { role: "bot", text: answer }]);
+    } catch(e) {
+      setMessages(m => [...m, { role: "bot", text: "Connection error. Please try again." }]);
+    }
+    setBusy(false);
+  };
+
+  return (
+    <div className="chat-window">
+      <div className="chat-header">
+        <span>🤖 App Help Assistant</span>
+        <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--t2)", fontSize: 16, cursor: "pointer" }}>✕</button>
+      </div>
+      <div className="chat-msgs">
+        {messages.map((m, i) => <div key={i} className={`chat-msg ${m.role}`}>{m.text}</div>)}
+        {busy && <div className="chat-msg bot" style={{ opacity: 0.6 }}>Thinking...</div>}
+        <div ref={bottomRef} />
+      </div>
+      <div className="chat-input-row">
+        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} placeholder="Ask a question..." disabled={busy} />
+        <button onClick={send} disabled={busy}>➤</button>
       </div>
     </div>
   );
@@ -414,6 +616,7 @@ export default function App() {
   const [notif, setNotif] = useState(null);
   const [showPwModal, setShowPwModal] = useState(false);
   const [showFbModal, setShowFbModal] = useState(false);
+  const [showHelpChat, setShowHelpChat] = useState(false);
   const [viewAsStaff, setViewAsStaff] = useState(false);
   const [theme, setTheme] = useState(() => {
     try { return localStorage.getItem("bfrs-theme") || "dark"; } catch { return "dark"; }
@@ -467,8 +670,14 @@ export default function App() {
               </div>
             </div>
             {showPwModal && <ChangePassword onClose={() => setShowPwModal(false)} notify={notify} />}
-            {showFbModal && <FeedbackModal onClose={() => setShowFbModal(false)} notify={notify} userId={profile.id} />}
-            <button className="fb-fab" onClick={() => setShowFbModal(true)} title="Send Feedback">💬</button>
+            {showFbModal && <FeedbackModal onClose={() => setShowFbModal(false)} notify={notify} userId={profile.id} userName={profile.name} />}
+            {showHelpChat && <HelpChat onClose={() => setShowHelpChat(false)} />}
+            <div className="fab-group">
+              <div className="fab-label">Help</div>
+              <button className="help-fab" onClick={() => { setShowHelpChat(h => !h); setShowFbModal(false); }} title="App Help">🤖</button>
+              <button className="fb-fab" onClick={() => { setShowFbModal(true); setShowHelpChat(false); }} title="Send Feedback">💬</button>
+              <div className="fab-label">Feedback</div>
+            </div>
             <main className="mn">
               {profile.role === "coordinator" && !viewAsStaff
                 ? <CoordView profile={profile} notify={notify} />
@@ -505,7 +714,7 @@ function Auth({ onLogin, notify, theme, toggleTheme }) {
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
-  const [reg, setReg] = useState({ name: "", email: "", password: "", confirm: "", level: "EMT", shift: "A", phone: "" });
+  const [reg, setReg] = useState({ name: "", email: "", password: "", confirm: "", level: "EMT", shift: "A", phone: "", kelly_number: "" });
   const [rErr, setRErr] = useState("");
 
   const login = async () => {
@@ -517,16 +726,25 @@ function Auth({ onLogin, notify, theme, toggleTheme }) {
 
   const register = async () => {
     setRErr(""); setBusy(true);
-    const { name, email, password, confirm, level, shift, phone } = reg;
+    const { name, email, password, confirm, level, shift, phone, kelly_number } = reg;
     if (!name || !email || !password || !phone) { setRErr("All fields required."); setBusy(false); return; }
     if (password !== confirm) { setRErr("Passwords do not match."); setBusy(false); return; }
     if (password.length < 6) { setRErr("Min 6 characters."); setBusy(false); return; }
-    const { error } = await supabase.auth.signUp({
+    const { data: signUpData, error } = await supabase.auth.signUp({
       email: email.trim(), password,
-      options: { data: { name, level, shift, phone, role: "staff" } }
+      options: { data: { name, level, shift, phone, kelly_number: kelly_number ? parseInt(kelly_number) : null, role: "staff" } }
     });
+    if (error) { setBusy(false); setRErr(error.message); return; }
+    // Directly upsert profile row so all fields (including kelly_number) are saved immediately
+    if (signUpData?.user?.id) {
+      await supabase.from("profiles").upsert({
+        id: signUpData.user.id,
+        name, email: email.trim(), level, shift, phone,
+        kelly_number: kelly_number ? parseInt(kelly_number) : null,
+        role: "staff", approved: false,
+      }, { onConflict: "id" });
+    }
     setBusy(false);
-    if (error) { setRErr(error.message); return; }
     // Fire notification to coordinators
     sendNotification("new_registration", { name, email: email.trim(), level, shift, phone });
     notify("Registration submitted — awaiting coordinator approval.");
@@ -561,6 +779,7 @@ function Auth({ onLogin, notify, theme, toggleTheme }) {
           <div className="fg"><label className="fl">Shift</label><select className="sel" value={reg.shift} onChange={e => setReg(p => ({ ...p, shift: e.target.value }))}><option>A</option><option>B</option><option>C</option><option>Days</option></select></div>
         </div>
         <div className="fg"><label className="fl">Phone</label><input className="fi" type="tel" value={reg.phone} onChange={e => setReg(p => ({ ...p, phone: e.target.value }))} /></div>
+        <div className="fg"><label className="fl">Kelly Day # <span style={{fontSize:10,color:"var(--t2)"}}>(1–9, ask your supervisor)</span></label><select className="sel" value={reg.kelly_number} onChange={e => setReg(p => ({ ...p, kelly_number: e.target.value }))}><option value="">— Select —</option>{[1,2,3,4,5,6,7,8,9].map(n => <option key={n} value={n}>{n}</option>)}</select></div>
         <button className="bt bta" style={{ width: "100%", marginTop: 6 }} onClick={register} disabled={busy}>{busy ? "Registering..." : "Register"}</button>
       </>)}
     </div></div>
@@ -605,9 +824,72 @@ function useData() {
 
 // ─── EVENT STATUS BADGE ───────────────────────────────────────────────────────
 function StatusBadge({ status }) {
-function SignupBadge({status}){const s=SIGNUP_STATUS[status]||SIGNUP_STATUS.pending;return <span className={`bg ${s.cls}`}>{s.label}</span>;}
   return <span className="sts" style={{ background: `${STATUS_COLORS[status]}22`, color: STATUS_COLORS[status] }}>{STATUS_LABELS[status]}</span>;
 }
+function SignupBadge({status}){const s=SIGNUP_STATUS[status]||SIGNUP_STATUS.pending;return <span className={`bg ${s.cls}`}>{s.label}</span>;}
+
+// ─── SMART SIGNUP SCORER ─────────────────────────────────────────────────────
+// Scores each pending signup to recommend best approvals for an event.
+// Criteria: credential match, not on duty, fewer events this month, sign-up order.
+const scoreSignup = (signup, staff, event, allSignups, allEvents) => {
+  let score = 0;
+  const eventDate = event.date ? new Date(event.date) : null;
+  const month = eventDate ? eventDate.getMonth() : -1;
+  const year = eventDate ? eventDate.getFullYear() : -1;
+
+  // +30 credential match
+  const needsParamedic = (event.needed_paramedics || 0) > 0;
+  const needsEMT = (event.needed_emts || 0) > 0;
+  if (staff.level === "Paramedic" && needsParamedic) score += 30;
+  else if (staff.level === "EMT" && needsEMT) score += 30;
+  else if (staff.level === "Paramedic" && !needsParamedic && needsEMT) score += 10; // paramedic can fill EMT slot
+  
+  // +25 not on regular duty that day
+  const onShift = getShiftForDate(event.date) === staff.shift;
+  if (!onShift) score += 25;
+
+  // +20 no time conflicts with existing confirmed events
+  const conflicts = findConflicts(event.id, staff.id, allEvents, allSignups);
+  if (conflicts.length === 0) score += 20;
+
+  // +15 fewer confirmed events this month (inversely proportional)
+  const monthlyConfirmed = allSignups.filter(s =>
+    s.staff_id === staff.id && s.status === "confirmed" &&
+    (() => { const d = allEvents.find(e => e.id === s.event_id); if (!d?.date) return false; const dd = new Date(d.date); return dd.getMonth() === month && dd.getFullYear() === year; })()
+  ).length;
+  score += Math.max(0, 15 - monthlyConfirmed * 3);
+
+  // +5 earlier signup (first come noted)
+  score += signup.signed_up_at ? 5 : 0;
+
+  return score;
+};
+
+// Returns set of signup IDs that are recommended for this event
+const getRecommended = (pendingSignups, profiles, event, allSignups, allEvents) => {
+  if (!pendingSignups.length) return new Set();
+  const scored = pendingSignups.map(s => {
+    const staff = profiles.find(p => p.id === s.staff_id);
+    if (!staff) return { id: s.id, score: 0, level: "EMT" };
+    return { id: s.id, score: scoreSignup(s, staff, event, allSignups, allEvents), level: staff.level };
+  }).sort((a, b) => b.score - a.score);
+
+  const recommended = new Set();
+  let parasNeeded = event.needed_paramedics || 0;
+  let emtsNeeded = event.needed_emts || 0;
+
+  // Fill paramedic slots first from top-scored paramedics
+  for (const s of scored) {
+    if (parasNeeded > 0 && s.level === "Paramedic") { recommended.add(s.id); parasNeeded--; }
+  }
+  // Fill EMT slots from top-scored EMTs (paramedics can backfill)
+  for (const s of scored) {
+    if (emtsNeeded > 0 && (s.level === "EMT" || (s.level === "Paramedic" && !recommended.has(s.id)))) {
+      recommended.add(s.id); emtsNeeded--;
+    }
+  }
+  return recommended;
+};
 
 // ─── COORDINATOR VIEW ─────────────────────────────────────────────────────────
 function CoordView({ profile, notify }) {
@@ -728,17 +1010,24 @@ function CoordView({ profile, notify }) {
     await logActivity("removed_signup", "signup", eventId, { staffName: ac?.name });
     notify("Signup removed."); refresh();
   };
-  const approveSignup = async (signupId, forceOverride = false) => {
+  const approveSignup = async (signupId) => {
     const su = signups.find(s => s.id === signupId);
     const ac = profiles.find(p => p.id === su?.staff_id);
     const ev = events.find(e => e.id === su?.event_id);
-    // Check for conflicts
-    if (!forceOverride) {
-      const conflicts = findConflicts(su?.event_id, su?.staff_id, events, signups);
-      if (conflicts.length > 0) {
-        const names = conflicts.map(c => `${c.name} (${fmtDate(c.date)} ${fmtTime(c.time_start)}-${fmtTime(c.time_end)})`).join("\n");
-        if (!window.confirm(`⚠️ SCHEDULE CONFLICT\n\n${ac?.name} is already approved for:\n${names}\n\nThis overlaps with ${ev?.name}.\n\nApprove anyway?`)) return;
-      }
+    // Hard block — cannot approve if staff already confirmed for overlapping event
+    const conflicts = findConflicts(su?.event_id, su?.staff_id, events, signups);
+    if (conflicts.length > 0) {
+      const c = conflicts[0];
+      const msg = `Cannot approve — ${ac?.name} is already confirmed for "${c.name}" (${fmtDate(c.date)} ${fmtTime(c.time_start)}–${fmtTime(c.time_end)}) which overlaps with this event.`;
+      notify(msg, "error");
+      sendNotification("overlap_alert", {
+        staffName: ac?.name,
+        eventDate: fmtDate(ev?.date),
+        newEvent: ev?.name,
+        existingEvent: c.name,
+        existingTime: `${fmtTime(c.time_start)}–${fmtTime(c.time_end)}`,
+      });
+      return;
     }
     await supabase.from("signups").update({ status: "confirmed" }).eq("id", signupId);
     await logActivity("approved_signup", "signup", signupId, { staffName: ac?.name, eventName: ev?.name });
@@ -854,10 +1143,57 @@ function CoordView({ profile, notify }) {
       <div className="stw">
         <div className="stc"><div className="sv sa">{events.length}</div><div className="svl">Events</div></div>
         <div className="stc"><div className="sv sg">{profiles.filter(p => p.approved && p.role === "staff").length}</div><div className="svl">Active Staff</div></div>
-        <div className="stc"><div className="sv so">{pendingAccounts.length}</div><div className="svl">Pending</div></div>
-        <div className="stc"><div className="sv sy">{signups.filter(s => s.status === "confirmed").length}</div><div className="svl">Signups</div></div>
+        <div className="stc" style={{cursor:"pointer"}} onClick={() => setTab("staff")} title="Click to review"><div className="sv so">{pendingAccounts.length}</div><div className="svl">Pending Accts {pendingAccounts.length > 0 && "→"}</div></div>
+        <div className="stc" style={{cursor:"pointer"}} onClick={() => setTab("events")} title="Click to review"><div className="sv sy">{pendingSignups.length}</div><div className="svl">Pending Signups {pendingSignups.length > 0 && "→"}</div></div>
+        <div className="stc" style={{cursor:"pointer"}} onClick={() => setTab("cr")} title="Click to review"><div className="sv" style={{color:"var(--r)"}}>{pendingCR.length}</div><div className="svl">Withdrawals {pendingCR.length > 0 && "→"}</div></div>
         <div className="stc"><div className="sv sg">{attendance.filter(a => a.sign_out_time).reduce((s, a) => s + (parseFloat(calcHours(a.sign_in_time, a.sign_out_time)) || 0), 0).toFixed(0)}</div><div className="svl">Total Hrs</div></div>
       </div>
+
+      {(pendingAccounts.length > 0 || pendingSignups.length > 0 || pendingCR.length > 0) && (
+        <div style={{background:"var(--s)",border:"1px solid var(--bd)",borderRadius:10,padding:14,marginBottom:12}}>
+          <div className="sct" style={{marginBottom:8}}>🔔 Pending Actions</div>
+          {pendingAccounts.map(a => (
+            <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid var(--bd)"}}>
+              <div>
+                <span style={{fontWeight:500}}>{a.name}</span>
+                <span style={{fontSize:10,color:"var(--t2)",marginLeft:6}}>{a.level} · Shift {a.shift}</span>
+                <span style={{fontSize:10,background:"rgba(251,146,60,.15)",color:"var(--o)",borderRadius:4,padding:"1px 5px",marginLeft:6}}>New Registration</span>
+              </div>
+              <button className="bt bts btg" style={{fontSize:10}} onClick={() => setTab("staff")}>Review →</button>
+            </div>
+          ))}
+          {pendingSignups.map(s => {
+            const ac = profiles.find(p => p.id === s.staff_id);
+            const ev = events.find(e => e.id === s.event_id);
+            if (!ac || !ev) return null;
+            return (
+              <div key={s.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid var(--bd)"}}>
+                <div>
+                  <span style={{fontWeight:500}}>{ac.name}</span>
+                  <span style={{fontSize:10,color:"var(--t2)",marginLeft:6}}>{ac.level} · {fmtDate(ev.date)}</span>
+                  <span style={{fontSize:10,background:"rgba(251,191,36,.15)",color:"var(--y)",borderRadius:4,padding:"1px 5px",marginLeft:6}}>{ev.name}</span>
+                </div>
+                <button className="bt bts bta" style={{fontSize:10}} onClick={() => { setTab("events"); setSelEv(ev.id); }}>Review →</button>
+              </div>
+            );
+          })}
+          {pendingCR.map(c => {
+            const ac = profiles.find(p => p.id === c.staff_id);
+            const ev = events.find(e => e.id === c.event_id);
+            if (!ac || !ev) return null;
+            return (
+              <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid var(--bd)"}}>
+                <div>
+                  <span style={{fontWeight:500}}>{ac.name}</span>
+                  <span style={{fontSize:10,color:"var(--t2)",marginLeft:6}}>{fmtDate(ev.date)}</span>
+                  <span style={{fontSize:10,background:"rgba(239,68,68,.15)",color:"var(--r)",borderRadius:4,padding:"1px 5px",marginLeft:6}}>Wants to withdraw from {ev.name}</span>
+                </div>
+                <button className="bt bts btr" style={{fontSize:10}} onClick={() => setTab("cr")}>Review →</button>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <div className="dbr">
         <button className="bt bp" onClick={exportAttendance}>📥 Export Attendance CSV</button>
@@ -962,19 +1298,34 @@ function CoordView({ profile, notify }) {
               </div>
               {selEv === ev.id && (
                 <div style={{ marginTop: 14 }}>
-                  {pendEv.length > 0 && (
+                  {pendEv.length > 0 && (() => {
+                    const recommended = getRecommended(pendEv, profiles, ev, signups, events);
+                    const sorted = [...pendEv].sort((a, b) => {
+                      const sa = scoreSignup(a, profiles.find(p=>p.id===a.staff_id)||{}, ev, signups, events);
+                      const sb = scoreSignup(b, profiles.find(p=>p.id===b.staff_id)||{}, ev, signups, events);
+                      return sb - sa;
+                    });
+                    return (
                     <div className="pend-section">
                       <div className="sct" style={{ color: "var(--o)" }}>⏳ Pending Approval ({pendEv.length})</div>
-                      {pendEv.map(s => {
+                      <div style={{ fontSize: 10, color: "var(--t2)", marginBottom: 8 }}>⭐ = App recommendation based on credential, duty status, and workload this month</div>
+                      {sorted.map(s => {
                         const ac = profiles.find(p => p.id === s.staff_id); if (!ac) return null;
                         const onShift = getShiftForDate(ev.date) === ac.shift;
                         const gettingOff = getShiftForDate(ev.date) === NEXT_SHIFT[ac.shift];
                         const conflicts = findAllOverlaps(ev.id, s.staff_id, events, signups);
+                        const isRec = recommended.has(s.id);
+                        const monthlyCount = signups.filter(su => su.staff_id === ac.id && su.status === "confirmed").length;
                         return (
-                          <div className="srow" key={s.id}>
+                          <div className="srow" key={s.id} style={isRec ? { borderLeft: "3px solid var(--g)", paddingLeft: 8 } : {}}>
                             <div>
-                              <div className="sn">{ac.name} {onShift && <span style={{ color: "var(--o)", fontSize: 10 }}>⚠️ On duty</span>}{gettingOff && <span style={{ color: "var(--a)", fontSize: 10 }}>ℹ️ Off 0800</span>}</div>
-                              <div className="sme">{ac.level} · Shift {ac.shift} · {fmtDateTime(s.signed_up_at)}</div>
+                              <div className="sn">
+                                {isRec && <span style={{ color: "var(--g)", marginRight: 4 }}>⭐</span>}
+                                {ac.name}
+                                {onShift && <span style={{ color: "var(--o)", fontSize: 10, marginLeft: 4 }}>⚠️ On duty</span>}
+                                {gettingOff && <span style={{ color: "var(--a)", fontSize: 10, marginLeft: 4 }}>ℹ️ Off 0800</span>}
+                              </div>
+                              <div className="sme">{ac.level} · Shift {ac.shift} · {monthlyCount} event{monthlyCount !== 1 ? "s" : ""} this month · Signed up {fmtDateTime(s.signed_up_at)}</div>
                               {conflicts.length > 0 && <div style={{ fontSize: 10, marginTop: 2 }}>{conflicts.map((c, i) => <span key={i} style={{ color: c.signupStatus === "confirmed" ? "var(--r)" : "var(--o)", marginRight: 6 }}>{c.signupStatus === "confirmed" ? "🚫" : "⚡"} {c.name} ({c.signupStatus})</span>)}</div>}
                             </div>
                             <div style={{ display: "flex", gap: 4 }}><button className="bt bts btg" onClick={() => approveSignup(s.id)}>Approve</button><button className="bt bts btr" onClick={() => denySignup(s.id)}>Deny</button></div>
@@ -982,6 +1333,8 @@ function CoordView({ profile, notify }) {
                         );
                       })}
                     </div>
+                    );
+                  })()}
                   )}
                   <div className="dv" /><div className="sct">Approved Staff ({es.length})</div>
                   {es.length === 0 && <div style={{ color: "var(--t2)", fontSize: 12 }}>None yet.</div>}
@@ -1035,7 +1388,7 @@ function CoordView({ profile, notify }) {
       </>}
       <div className="sct">Active Staff ({profiles.filter(a => a.approved).length})</div>
       <div className="cd"><table className="lt">
-        <thead><tr><th>Name</th><th>Email</th><th>Level</th><th>Shift</th><th>Phone</th><th>Role</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Name</th><th>Email</th><th>Level</th><th>Shift</th><th>Phone</th><th>Role</th></tr></thead>
         <tbody>{profiles.filter(a => a.approved).map(a => (
           <tr key={a.id}>
             <td style={{ fontWeight: 500 }}>{a.name}</td>
@@ -1043,13 +1396,14 @@ function CoordView({ profile, notify }) {
             <td>{a.level || "—"}</td>
             <td>{a.shift || "—"}</td>
             <td style={{ color: "var(--t2)" }}>{a.phone || "—"}</td>
-            <td><span className={`rb${a.role === "coordinator" ? " co" : ""}`}>{a.role}</span></td>
-            <td>{a.role === "staff"
-              ? <button className="promo-btn" onClick={() => promoteToCoordinator(a.id)}>Promote</button>
-              : a.id !== profile.id
-                ? <button className="demote-btn" onClick={() => demoteToStaff(a.id)}>Demote</button>
-                : <span style={{ color: "var(--t2)", fontSize: 10 }}>You</span>
-            }</td>
+            <td>
+              <span className={`rb${a.role === "coordinator" ? " co" : ""}`}>{a.role}</span>
+              {a.id !== profile.id && (
+                a.role === "staff"
+                  ? <button className="bt bts btg" style={{marginLeft:4,fontSize:9,padding:"2px 6px"}} onClick={() => promoteToCoordinator(a.id)}>Promote</button>
+                  : <button className="bt bts btr" style={{marginLeft:4,fontSize:9,padding:"2px 6px"}} onClick={() => demoteToStaff(a.id)}>Demote</button>
+              )}
+            </td>
           </tr>
         ))}</tbody>
       </table></div>
@@ -1254,22 +1608,13 @@ function StaffView({ profile, notify }) {
       notify("Signup withdrawn."); refresh(); return;
     }
 
-    // Confirmed → check if clocked in
-    const attRec = myAtt.find(a => a.event_id === eventId && a.sign_in_time);
-    if (attRec) {
-      // Clocked in → needs coordinator approval
-      const existingCR = myCR.find(c => c.event_id === eventId && c.status === "pending");
-      if (existingCR) { notify("Cancel request already pending.", "warn"); return; }
-      await supabase.from("cancel_requests").insert({ staff_id: profile.id, event_id: eventId, status: "pending", requested_at: nowISO() });
-      await logActivity("requested_cancel", "cancel_request", eventId, { eventName: ev?.name });
-      sendNotification("cancel_request", { staffName: profile.name, eventName: ev?.name });
-      notify("Cancel request sent to coordinator.", "warn");
-    } else {
-      // Not clocked in → direct cancel
-      await supabase.from("signups").delete().eq("id", mySU.id);
-      await logActivity("cancelled_signup", "signup", eventId, { eventName: ev?.name });
-      notify("Signup cancelled.");
-    }
+    // Confirmed → always requires coordinator approval
+    const existingCR = myCR.find(c => c.event_id === eventId && c.status === "pending");
+    if (existingCR) { notify("Withdrawal request already pending — awaiting coordinator approval.", "warn"); return; }
+    await supabase.from("cancel_requests").insert({ staff_id: profile.id, event_id: eventId, status: "pending", requested_at: nowISO() });
+    await logActivity("requested_cancel", "cancel_request", eventId, { eventName: ev?.name });
+    sendNotification("cancel_request", { staffName: profile.name, eventName: ev?.name });
+    notify("Withdrawal request sent — awaiting coordinator approval.", "warn");
     refresh();
   };
 
@@ -1324,7 +1669,7 @@ function StaffView({ profile, notify }) {
           <div className="evc" key={ev.id} style={isMine ? { borderColor: myS?.status === "confirmed" ? "var(--g)" : "var(--o)" } : {}}>
             <div className="evh">
               <div>
-                <div className="evn">{ev.name} <StatusBadge status={ev.status} /> {isMine && <SignupBadge status={myS?.status || "pending"} />} {hasConflict && !isMine && <span className="bg so2">⚡ Overlap</span>}</div>
+                <div className="evn">{ev.name} <StatusBadge status={ev.status} /> {isMine && <SignupBadge status={myS?.status || "pending"} />} {isMine && myCR.find(c => c.event_id === ev.id && c.status === "pending") && <span className="bg so2">⏳ Withdrawal Pending</span>} {hasConflict && !isMine && <span className="bg so2">⚡ Overlap</span>}</div>
                 <div className="evm">{fmtDate(ev.date)} · {fmtTime(ev.time_start)} – {fmtTime(ev.time_end)} · <span className="sts" style={{background:"rgba(167,139,250,.2)",color:"var(--p)"}}>Shift {getShiftForDate(ev.date)}</span></div>
                 {(ev.venue || ev.location) && <div className="loc">
                   {ev.venue && <span style={{ fontWeight: 500, color: "var(--t)" }}>{ev.venue}</span>}
@@ -1336,7 +1681,7 @@ function StaffView({ profile, notify }) {
                 {canSignUp && <button className="bt bts bta" onClick={() => signUpForEvent(ev.id)}>Sign Up</button>}
                 {myS?.status === "confirmed" && !myAttRec && <button className="bt bts btg" onClick={() => signIn(ev.id)}>Clock In</button>}
                 {isMine && myAttRec && !myAttRec.sign_out_time && <button className="bt bts bto" onClick={() => signOut(ev.id)}>Clock Out</button>}
-                {isMine && <button className="bt bts btr" onClick={() => cancelSignup(ev.id)}>{myS?.status === "pending" ? "Withdraw" : "Cancel"}</button>}
+                {isMine && !myCR.find(c => c.event_id === ev.id && c.status === "pending") && <button className="bt bts btr" onClick={() => cancelSignup(ev.id)}>{myS?.status === "pending" ? "Withdraw" : "Cancel"}</button>}
               </div>
             </div>
             {ev.notes && <div className="nts">📋 {ev.notes}</div>}
