@@ -912,7 +912,7 @@ const getRecommended = (pendingSignups, profiles, event, allSignups, allEvents) 
 // ─── COORDINATOR VIEW ─────────────────────────────────────────────────────────
 function CoordView({ profile, notify }) {
   const { profiles, events, signups, attendance, cancelReqs, activityLog, feedback, loading, refresh } = useData();
-  const [tab, setTab] = useState("events");
+  const [tab, setTab] = useState("dash");
   const [addEv, setAddEv] = useState({ name: "", date: "", time_start: "", time_end: "", location: "", venue: "", notes: "", needed_paramedics: 2, needed_emts: 2 });
   const [selEv, setSelEv] = useState(null);
   const [editEv, setEditEv] = useState(null);
