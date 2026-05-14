@@ -88,11 +88,11 @@ jobs:
           curl -s -X POST "https://bfrs-events-staffing.netlify.app/.netlify/functions/send-email" \
             -H "Content-Type: application/json" \
             -d "{
-              \"to\": [\"eric.glover@birminghamal.gov\"],
+              \"to\": [\"grabcalls@gmail.com\"],
               \"subject\": \"🚨 BFRS App Alert — Action Required\",
               \"html\": \"<div style='font-family:Arial,sans-serif;padding:20px'><h2 style='color:#dc2626'>🔥 BFRS System Alert</h2><p>The following issues were detected during the daily health check:</p><ul>$ISSUES</ul><p style='margin-top:20px'><a href='https://bfrs-events-staffing.netlify.app' style='background:#dc2626;color:white;padding:10px 20px;text-decoration:none;border-radius:6px'>Open App</a></p><p style='color:#888;font-size:12px;margin-top:16px'>Daily health check run by GitHub Actions · $(date)</p></div>\"
             }"
-          echo "Alert email sent to eric.glover@birminghamal.gov"
+          echo "Alert email sent to grabcalls@gmail.com"
 
       - name: Summary
         run: |
