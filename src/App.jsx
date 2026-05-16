@@ -849,36 +849,49 @@ function SignupBadge({status}){const s=SIGNUP_STATUS[status]||SIGNUP_STATUS.pend
 // ─── SMART SIGNUP SCORER ─────────────────────────────────────────────────────
 // Scores each pending signup to recommend best approvals for an event.
 // Criteria: credential match, not on duty, fewer events this month, sign-up order.
+// Payday Fridays every 14 days from May 1, 2026
+const PAYDAY_REF = new Date("2026-05-01T00:00:00");
+const isPaydayFriday = (dateStr) => {
+  if (!dateStr) return false;
+  const d = new Date(dateStr + "T00:00:00");
+  if (d.getDay() !== 5) return false; // Must be Friday
+  const diffDays = Math.round((d - PAYDAY_REF) / (1000 * 60 * 60 * 24));
+  return diffDays >= 0 && diffDays % 14 === 0;
+};
+
+// Kelly Day reference dates (OD1 for each shift in 2026)
+const KELLY_REF = { A: new Date("2026-05-02T00:00:00"), B: new Date("2026-05-03T00:00:00"), C: new Date("2026-05-04T00:00:00") };
+const isKellyDay = (dateStr, kellyNumber, shift) => {
+  if (!dateStr || !kellyNumber || !shift || shift === "Days" || !KELLY_REF[shift]) return false;
+  // Payday Friday = Kelly Day is skipped, staff must work their regular shift
+  if (isPaydayFriday(dateStr)) return false;
+  const d = new Date(dateStr + "T00:00:00");
+  const ref = KELLY_REF[shift];
+  const diffDays = Math.round((d - ref) / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) return false;
+  const cycleDay = diffDays % 27; // 27-day Kelly cycle
+  // Each kelly number corresponds to a specific day in the cycle
+  const kellyDayInCycle = (parseInt(kellyNumber) - 1) * 3; // kelly #1 = day 0, #2 = day 3, etc.
+  return cycleDay === kellyDayInCycle;
+};
+
 const scoreSignup = (signup, staff, event, allSignups, allEvents) => {
   let score = 0;
-  const eventDate = event.date ? new Date(event.date) : null;
-  const month = eventDate ? eventDate.getMonth() : -1;
-  const year = eventDate ? eventDate.getFullYear() : -1;
 
-  // +30 credential match
-  const needsParamedic = (event.needed_paramedics || 0) > 0;
-  const needsEMT = (event.needed_emts || 0) > 0;
-  if (staff.level === "Paramedic" && needsParamedic) score += 30;
-  else if (staff.level === "EMT" && needsEMT) score += 30;
-  else if (staff.level === "Paramedic" && !needsParamedic && needsEMT) score += 10; // paramedic can fill EMT slot
-  
-  // +25 not on regular duty that day
+  // +50 off duty that day (not their working shift)
   const onShift = getShiftForDate(event.date) === staff.shift;
-  if (!onShift) score += 25;
+  if (!onShift) score += 50;
 
-  // +20 no time conflicts with existing confirmed events
+  // +30 Kelly Day = staff has the day off their regular shift
+  // Exception: payday Friday = Kelly Day skipped, they work regular shift (already handled in isKellyDay)
+  const kelly = isKellyDay(event.date, staff.kelly_number, staff.shift);
+  if (kelly) score += 30;
+
+  // +20 no time overlap with other confirmed events
   const conflicts = findConflicts(event.id, staff.id, allEvents, allSignups);
   if (conflicts.length === 0) score += 20;
 
-  // +15 fewer confirmed events this month (inversely proportional)
-  const monthlyConfirmed = allSignups.filter(s =>
-    s.staff_id === staff.id && s.status === "confirmed" &&
-    (() => { const d = allEvents.find(e => e.id === s.event_id); if (!d?.date) return false; const dd = new Date(d.date); return dd.getMonth() === month && dd.getFullYear() === year; })()
-  ).length;
-  score += Math.max(0, 15 - monthlyConfirmed * 3);
-
-  // +5 earlier signup (first come noted)
-  score += signup.signed_up_at ? 5 : 0;
+  // Tiebreaker handled in sort: earliest signup time wins
 
   return score;
 };
@@ -919,6 +932,8 @@ function CoordView({ profile, notify }) {
   const fileRef = useRef(null);
   const [upRes, setUpRes] = useState(null);
   const [previewEvs, setPreviewEvs] = useState(null);
+  const [editingAttId, setEditingAttId] = useState(null);
+  const [editAttTimes, setEditAttTimes] = useState({clockIn:"", clockOut:""});
 
   const pendingAccounts = profiles.filter(p => !p.approved && p.role === "staff");
   const pendingCR = cancelReqs.filter(c => c.status === "pending");
@@ -1335,15 +1350,25 @@ function CoordView({ profile, notify }) {
                 <div style={{ marginTop: 14 }}>
                   {pendEv.length > 0 && (() => {
                     const recommended = getRecommended(pendEv, profiles, ev, signups, events);
+                    const levelOrder = {"Paramedic":0,"EMT Advanced":1,"EMT":2};
                     const sorted = [...pendEv].sort((a, b) => {
-                      const sa = scoreSignup(a, profiles.find(p=>p.id===a.staff_id)||{}, ev, signups, events);
-                      const sb = scoreSignup(b, profiles.find(p=>p.id===b.staff_id)||{}, ev, signups, events);
-                      return sb - sa;
+                      const aStaff = profiles.find(p=>p.id===a.staff_id)||{};
+                      const bStaff = profiles.find(p=>p.id===b.staff_id)||{};
+                      // 1. Credential: Paramedic → EMT Advanced → EMT Basic
+                      const aLvl = levelOrder[aStaff.level] ?? 3;
+                      const bLvl = levelOrder[bStaff.level] ?? 3;
+                      if (aLvl !== bLvl) return aLvl - bLvl;
+                      // 2. Score within group (off duty, no kelly, no conflict)
+                      const sa = scoreSignup(a, aStaff, ev, signups, events);
+                      const sb = scoreSignup(b, bStaff, ev, signups, events);
+                      if (sa !== sb) return sb - sa;
+                      // 3. Tiebreaker: earliest signup time wins
+                      return new Date(a.signed_up_at||0) - new Date(b.signed_up_at||0);
                     });
                     return (
                     <div className="pend-section">
                       <div className="sct" style={{ color: "var(--o)" }}>⏳ Pending Approval ({pendEv.length})</div>
-                      <div style={{ fontSize: 10, color: "var(--t2)", marginBottom: 8 }}>⭐ = App recommendation based on credential, duty status, and workload this month</div>
+                      <div style={{ fontSize: 10, color: "var(--t2)", marginBottom: 8 }}>Sorted: Paramedic → EMT Advanced → EMT Basic. Within each group: off-duty ranks higher, Kelly Day off ranks higher, then earliest signup time wins.</div>
                       {sorted.map(s => {
                         const ac = profiles.find(p => p.id === s.staff_id); if (!ac) return null;
                         const onShift = getShiftForDate(ev.date) === ac.shift;
@@ -1372,6 +1397,30 @@ function CoordView({ profile, notify }) {
                   })()}
                   )}
                   <div className="dv" /><div className="sct">Approved Staff ({es.length})</div>
+                  {es.length > 0 && (() => {
+                    const approvedStaff = es.map(s => profiles.find(p => p.id === s.staff_id)).filter(Boolean);
+                    const emails = approvedStaff.map(p => p.email).filter(Boolean).join(",");
+                    const ts = ev.time_start ? ev.time_start.slice(0,5) : "06:00";
+                    const te = ev.time_end ? ev.time_end.slice(0,5) : "18:00";
+                    const startISO = ev.date + "T" + ts + ":00";
+                    const endISO = ev.date + "T" + te + ":00";
+                    const bodyLines = ["You have been selected to work the following BFRS Special Event:","","Event: "+ev.name,"Date: "+fmtDate(ev.date),"Time: "+(ev.time_start==="TBA"?"TBA":fmtTime(ev.time_start)+" – "+fmtTime(ev.time_end)),"Location: "+(ev.venue||ev.location||"TBD"),"","You must accept or decline this assignment invite or you will be removed from the event assignment.","","Staff assigned to this event:",...approvedStaff.map(p=>"• "+p.name+" ("+(p.level||"")+")"),];
+                    const bodyText = bodyLines.join("\n");
+                    const outlookUrl = "https://outlook.office.com/calendar/emsspecialevents@birminghamal.gov/deeplink/compose?path=/calendar/action/compose&rru=addevent" +
+                      "&subject=" + encodeURIComponent("BFRS Special Events — " + ev.name + " — " + fmtDate(ev.date)) +
+                      "&startdt=" + encodeURIComponent(startISO) +
+                      "&enddt=" + encodeURIComponent(endISO) +
+                      "&location=" + encodeURIComponent(ev.venue || ev.location || "TBD") +
+                      "&body=" + encodeURIComponent(bodyText) +
+                      "&to=" + encodeURIComponent(emails);
+                    return (
+                      <div style={{margin:"8px 0 12px 0",background:"rgba(0,120,212,0.06)",border:"1px solid rgba(0,120,212,0.2)",borderRadius:8,padding:"10px 14px"}}>
+                        <div style={{fontSize:11,color:"#1a5276",marginBottom:6,fontWeight:600}}>📧 Outlook Invite Ready — {approvedStaff.length} staff</div>
+                        <div style={{fontSize:10,color:"#555",marginBottom:8}}>Opens Outlook pre-filled with all event details and staff emails. Chief hits Send.</div>
+                        <button className="bt btg" style={{fontSize:12,width:"100%"}} onClick={() => window.open(outlookUrl,"_blank","noopener,noreferrer")}>📅 Open Outlook Invite</button>
+                      </div>
+                    );
+                  })()}
                   {es.length === 0 && <div style={{ color: "var(--t2)", fontSize: 12 }}>None yet.</div>}
                   {es.map(s => {
                     const ac = profiles.find(p => p.id === s.staff_id); if (!ac) return null;
@@ -1452,13 +1501,77 @@ function CoordView({ profile, notify }) {
         <div className="stc"><div className="sv sy">{attendance.filter(a => !a.sign_out_time).length}</div><div className="svl">Active</div></div>
       </div>
       <button className="bt bp" style={{ marginBottom: 14 }} onClick={exportAttendance}>📥 Export CSV</button>
-      <div className="cd"><table className="lt">
-        <thead><tr><th>Staff</th><th>Event</th><th>Clock In</th><th>Clock Out</th><th>Hrs</th></tr></thead>
-        <tbody>{attendance.map(a => {
-          const ac = profiles.find(x => x.id === a.staff_id); const ev = events.find(x => x.id === a.event_id);
-          return (<tr key={a.id}><td>{ac?.name || "?"}</td><td>{ev?.name || "?"}</td><td>{fmtDateTime(a.sign_in_time)}</td><td>{a.sign_out_time ? fmtDateTime(a.sign_out_time) : <span className="bg si">Active</span>}</td><td>{a.sign_out_time ? calcHours(a.sign_in_time, a.sign_out_time) + " hrs" : "—"}</td></tr>);
-        })}</tbody>
-      </table></div>
+      {attendance.length === 0 && <div className="ey"><div className="ei">🕐</div>No clock records yet.</div>}
+      {attendance.map(a => {
+        const ac = profiles.find(x => x.id === a.staff_id);
+        const ev = events.find(x => x.id === a.event_id);
+        const isEdit = editingAttId === a.id;
+        const timeOpts = Array.from({length:24*4},(_,i)=>{
+          const h=Math.floor(i/4).toString().padStart(2,"0");
+          const m=(i%4*15).toString().padStart(2,"0");
+          return {label:`${h}:${m}`,val:(ev?.date||"2026-01-01")+"T"+h+":"+m+":00"};
+        });
+        return (
+          <div key={a.id} style={{background:"var(--s)",border:"1px solid var(--bd)",borderRadius:10,padding:"12px 14px",marginBottom:8}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:700,fontSize:14}}>{ac?.name || "?"}</div>
+                <div style={{fontSize:12,color:"var(--t2)"}}>{ev?.name || "?"} · {fmtDate(ev?.date)}</div>
+                <div style={{fontSize:12,marginTop:4}}>
+                  <span style={{color:"var(--t2)"}}>In: </span>{fmtDateTime(a.sign_in_time)}
+                  {a.sign_out_time
+                    ? <><span style={{color:"var(--t2)"}}> · Out: </span>{fmtDateTime(a.sign_out_time)} · <span style={{color:"var(--g)",fontWeight:600}}>{calcHours(a.sign_in_time,a.sign_out_time)} hrs</span></>
+                    : <span className="bg si" style={{marginLeft:6}}>Active</span>}
+                </div>
+              </div>
+              <div style={{display:"flex",gap:6,flexShrink:0}}>
+                <button className="bt bts bta" style={{fontSize:11,padding:"4px 10px"}} onClick={() => {
+                  if (isEdit) { setEditingAttId(null); return; }
+                  setEditingAttId(a.id);
+                  setEditAttTimes({clockIn:a.sign_in_time||"",clockOut:a.sign_out_time||""});
+                }}>✏️ {isEdit ? "Cancel" : "Edit"}</button>
+                <button className="bt bts btr" style={{fontSize:11,padding:"4px 10px"}} onClick={async() => {
+                  if (!window.confirm(`Delete clock record for ${ac?.name}? Cannot be undone.`)) return;
+                  await supabase.from("attendance").delete().eq("id",a.id);
+                  await logActivity("deleted_attendance","attendance",a.id,{staffName:ac?.name,eventName:ev?.name});
+                  notify(`Record deleted for ${ac?.name}.`); refresh();
+                }}>🗑 Delete</button>
+              </div>
+            </div>
+            {isEdit && (
+              <div style={{marginTop:12,borderTop:"1px solid var(--bd)",paddingTop:12}}>
+                <div style={{fontWeight:600,fontSize:12,marginBottom:8,color:"var(--a)"}}>Edit Times</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+                  <div>
+                    <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:3}}>Clock In *</label>
+                    <select className="fi" style={{fontSize:12}} value={editAttTimes.clockIn} onChange={e=>setEditAttTimes(p=>({...p,clockIn:e.target.value}))}>
+                      <option value="">-- Select time --</option>
+                      {timeOpts.map(o=><option key={o.val} value={o.val}>{o.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:3}}>Clock Out</label>
+                    <select className="fi" style={{fontSize:12}} value={editAttTimes.clockOut} onChange={e=>setEditAttTimes(p=>({...p,clockOut:e.target.value}))}>
+                      <option value="">-- Not clocked out --</option>
+                      {timeOpts.map(o=><option key={o.val} value={o.val}>{o.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <button className="bt btg" style={{fontSize:12,width:"100%"}} onClick={async()=>{
+                  if (!editAttTimes.clockIn) { notify("Clock In time is required.","error"); return; }
+                  const updates={sign_in_time:editAttTimes.clockIn};
+                  if (editAttTimes.clockOut) updates.sign_out_time=editAttTimes.clockOut;
+                  else updates.sign_out_time=null;
+                  const {error}=await supabase.from("attendance").update(updates).eq("id",a.id);
+                  if (error) { notify(error.message,"error"); return; }
+                  await logActivity("edited_attendance","attendance",a.id,{staffName:ac?.name,eventName:ev?.name});
+                  notify("Times updated."); setEditingAttId(null); refresh();
+                }}>Save Changes</button>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </>}
 
     {/* ── CANCEL REQUESTS ── */}
