@@ -549,11 +549,24 @@ function HelpChat({ onClose }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ system: HELP_SYSTEM_PROMPT, messages: [...history, { role: "user", content: q }] })
       });
-      const data = await res.json();
+      const rawText = await res.text();
+      let data;
+      try { data = JSON.parse(rawText); }
+      catch {
+        setMessages(m => [...m, { role: "bot", text: `🐛 HTTP ${res.status} — server returned non-JSON: ${rawText.slice(0, 300)}` }]);
+        setBusy(false);
+        return;
+      }
+      if (!res.ok || data?.error) {
+        const errMsg = data?.error?.message || (typeof data?.error === "string" ? data.error : `HTTP ${res.status}`);
+        setMessages(m => [...m, { role: "bot", text: `🐛 Upstream error: ${errMsg}` }]);
+        setBusy(false);
+        return;
+      }
       const answer = data.choices?.[0]?.message?.content || "Sorry, I couldn't get a response. Try again.";
       setMessages(m => [...m, { role: "bot", text: answer }]);
     } catch(e) {
-      setMessages(m => [...m, { role: "bot", text: "Connection error. Please try again." }]);
+      setMessages(m => [...m, { role: "bot", text: `🐛 Fetch failed: ${e.message || e}` }]);
     }
     setBusy(false);
   };
