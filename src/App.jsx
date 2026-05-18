@@ -666,7 +666,26 @@ export default function App() {
 
   const loadProfile = async (uid) => {
     const { data } = await supabase.from("profiles").select("*").eq("id", uid).single();
-    setProfile(data); setLoading(false);
+    if (data) { setProfile(data); setLoading(false); return; }
+    // Auto-repair: profile row missing (registration upsert likely failed under
+    // RLS before session was established). Rebuild from auth user metadata.
+    const { data: authData } = await supabase.auth.getUser();
+    const meta = authData?.user?.user_metadata || {};
+    const repaired = {
+      id: uid,
+      email: authData?.user?.email || "",
+      name: meta.name || "",
+      level: meta.level || "",
+      shift: meta.shift || "",
+      phone: meta.phone || "",
+      kelly_number: meta.kelly_number || null,
+      role: meta.role || "staff",
+      approved: false,
+    };
+    const { data: upserted, error: upErr } = await supabase.from("profiles").upsert(repaired, { onConflict: "id" }).select().single();
+    if (upErr) { console.error("Profile auto-repair failed:", upErr); setProfile(null); }
+    else { setProfile(upserted); }
+    setLoading(false);
   };
 
   const handleLogout = async () => { await supabase.auth.signOut(); setSession(null); setProfile(null); };
@@ -2103,6 +2122,7 @@ function StaffView({ profile, notify, openHelpChat }) {
   }, [mySignups, events, myAtt]);
 
   const signUpForEvent = async (eventId) => {
+    if (!profile?.id) { notify("Your profile didn't load correctly. Please refresh the page or log out and back in.", "error"); return; }
     const ev = events.find(e => e.id === eventId);
     if (ev?.status !== "open") { notify("Event is not open for signups.", "error"); return; }
     if (mySignups.find(s => s.event_id === eventId)) { notify("Already signed up.", "error"); return; }
