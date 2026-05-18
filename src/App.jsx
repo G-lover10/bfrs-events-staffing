@@ -1196,13 +1196,28 @@ function CoordView({ profile, notify }) {
   };
   const confirmImport = async () => {
     if (!previewEvs || previewEvs.events.length === 0) return;
-    const toInsert = previewEvs.events.map(ev => ({ ...ev, created_by: profile.id }));
+    const existingKeys = new Set(events.map(e => `${(e.name||"").trim().toLowerCase()}|${e.date}`));
+    const toInsert = [];
+    const skipped = [];
+    for (const ev of previewEvs.events) {
+      const key = `${(ev.name||"").trim().toLowerCase()}|${ev.date}`;
+      if (existingKeys.has(key)) { skipped.push(ev); continue; }
+      existingKeys.add(key);
+      toInsert.push({ ...ev, created_by: profile.id });
+    }
+    if (toInsert.length === 0) {
+      notify(`No new events — all ${skipped.length} already exist in the system.`, "warn");
+      setUpRes({ count: 0, errors: previewEvs.errors, skipped: skipped.length });
+      setPreviewEvs(null);
+      return;
+    }
     const { error } = await supabase.from("events").insert(toInsert);
     if (error) { notify("Import error: " + error.message, "error"); return; }
-    await logActivity("imported_events", "event", "bulk", { count: previewEvs.events.length });
-    setUpRes({ count: previewEvs.events.length, errors: previewEvs.errors });
+    await logActivity("imported_events", "event", "bulk", { count: toInsert.length, skipped: skipped.length });
+    setUpRes({ count: toInsert.length, errors: previewEvs.errors, skipped: skipped.length });
     setPreviewEvs(null);
-    notify(`${toInsert.length} events imported!`); refresh();
+    notify(`${toInsert.length} events imported!${skipped.length ? ` (${skipped.length} already existed and were skipped.)` : ""}`);
+    refresh();
   };
 
   // ── Dashboard data ──
@@ -1249,6 +1264,7 @@ function CoordView({ profile, notify }) {
       <button className={`tb${tab === "att" ? " on" : ""}`} onClick={() => setTab("att")}>Attendance</button>
       <button className={`tb${tab === "cr" ? " on" : ""}`} onClick={() => setTab("cr")}>Cancel Reqs{pendingCR.length > 0 && <span className="nd or">{pendingCR.length}</span>}</button>
       <button className={`tb${tab === "log" ? " on" : ""}`} onClick={() => setTab("log")}>Activity Log</button>
+      <button className={`tb${tab === "health" ? " on" : ""}`} onClick={() => setTab("health")}>Health</button>
       <button className={`tb${tab === "import" ? " on" : ""}`} onClick={() => setTab("import")}>Import</button>
       <button className={`tb${tab === "fb" ? " on" : ""}`} onClick={() => setTab("fb")}>Feedback{feedback.filter(f => f.status === "new").length > 0 && <span className="nd or">{feedback.filter(f => f.status === "new").length}</span>}</button>
     </div>
@@ -1693,6 +1709,54 @@ function CoordView({ profile, notify }) {
       </div>
     </>}
 
+    {/* ── HEALTH TAB ── */}
+    {tab === "health" && <>
+      <div className="sct">🏥 Data Health Checks</div>
+      <div style={{fontSize:12,color:"var(--t2)",marginBottom:14}}>Automated integrity checks across the database. Run these before each event to catch issues early.</div>
+      {(() => {
+        const seen = new Set();
+        const dupSignups = [];
+        signups.forEach(s => {
+          if (s.status === "cancelled") return;
+          const key = s.staff_id + "|" + s.event_id;
+          if (seen.has(key)) dupSignups.push(s); else seen.add(key);
+        });
+        const orphanAtt = attendance.filter(a => !events.find(e => e.id === a.event_id));
+        const noSignupStaff = profiles.filter(p => p.approved && p.role === "staff" && !signups.find(s => s.staff_id === p.id));
+        const missingFields = events.filter(e => !e.time_start || e.time_start === "TBA" || !e.time_end || e.time_end === "TBA" || (!e.venue && !e.location));
+        const ghostSignups = signups.filter(s => !events.find(e => e.id === s.event_id));
+
+        const issues = [
+          { id: "dup", label: "Duplicate signups (same staff + event)", count: dupSignups.length, color: "var(--r)", details: dupSignups.slice(0, 5).map(s => { const ev = events.find(e => e.id === s.event_id); const p = profiles.find(x => x.id === s.staff_id); return `${p?.name || "?"} → ${ev?.name || "?"} (${s.status})`; }) },
+          { id: "orphan", label: "Orphan attendance records (event deleted)", count: orphanAtt.length, color: "var(--o)", details: orphanAtt.slice(0, 5).map(a => { const p = profiles.find(x => x.id === a.staff_id); return `${p?.name || "?"} · clocked in ${fmtDateTime(a.sign_in_time)}`; }) },
+          { id: "nosignup", label: "Approved staff with zero signups", count: noSignupStaff.length, color: "var(--y)", details: noSignupStaff.slice(0, 10).map(p => `${p.name} (${p.level || "?"})`) },
+          { id: "missing", label: "Events missing time or venue", count: missingFields.length, color: "var(--y)", details: missingFields.slice(0, 5).map(e => `${e.name} (${fmtDate(e.date)})`) },
+          { id: "ghost", label: "Signups for deleted events", count: ghostSignups.length, color: "var(--r)", details: ghostSignups.slice(0, 5).map(s => { const p = profiles.find(x => x.id === s.staff_id); return `${p?.name || "?"} · event ID ${s.event_id}`; }) },
+        ];
+        const totalIssues = issues.reduce((s, i) => s + i.count, 0);
+
+        return (<>
+          <div className="cd" style={{padding:14,marginBottom:12,background: totalIssues === 0 ? "rgba(74,222,128,.08)" : "rgba(255,217,61,.08)", borderColor: totalIssues === 0 ? "rgba(74,222,128,.3)" : "rgba(255,217,61,.3)"}}>
+            {totalIssues === 0 ? "✅ All data integrity checks pass — no issues found." : `⚠️ Found ${totalIssues} issue${totalIssues === 1 ? "" : "s"} across ${issues.filter(i => i.count > 0).length} categor${issues.filter(i => i.count > 0).length === 1 ? "y" : "ies"}.`}
+          </div>
+          {issues.map(issue => (
+            <div className="cd" key={issue.id} style={{padding:12,marginBottom:10,opacity: issue.count === 0 ? .55 : 1}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{fontWeight:600}}>{issue.count === 0 ? "✅" : "⚠️"} {issue.label}</span>
+                <span style={{color: issue.count === 0 ? "var(--g)" : issue.color, fontWeight:700}}>{issue.count}</span>
+              </div>
+              {issue.count > 0 && issue.details.length > 0 && (
+                <ul style={{margin:"8px 0 0 0", padding:"0 0 0 18px", fontSize:12, color:"var(--t2)"}}>
+                  {issue.details.map((d, i) => <li key={i}>{d}</li>)}
+                  {issue.count > issue.details.length && <li style={{listStyle:"none",paddingLeft:0,fontStyle:"italic"}}>...and {issue.count - issue.details.length} more</li>}
+                </ul>
+              )}
+            </div>
+          ))}
+        </>);
+      })()}
+    </>}
+
     {/* ── IMPORT TAB ── */}
     {tab === "import" && <>
       <div className="ur">
@@ -1781,7 +1845,9 @@ function MyProfileTab({ profile, notify, refresh }) {
   const [staffProfMsg, setStaffProfMsg] = useState("");
   const [staffEditProf, setStaffEditProf] = useState({
     name: profile.name||"", email: profile.email||"", phone: profile.phone||"",
-    level: profile.level||"", shift: profile.shift||"", kelly_number: profile.kelly_number||""
+    level: profile.level||"", shift: profile.shift||"", kelly_number: profile.kelly_number||"",
+    availability: profile.availability || "available",
+    avail_note: profile.avail_note || ""
   });
   const [showPwModal, setShowPwModal] = useState(false);
   return (<>
@@ -1794,6 +1860,8 @@ function MyProfileTab({ profile, notify, refresh }) {
         <div>📞 {profile.phone||<span style={{color:"var(--o)"}}>No phone set</span>}</div>
         <div>🚒 {profile.level||<span style={{color:"var(--o)"}}>No level</span>} · Shift {profile.shift||<span style={{color:"var(--o)"}}>?</span>}</div>
         <div>📅 Kelly Day #: {profile.kelly_number||<span style={{color:"var(--o)"}}>Not set — ask your supervisor</span>}</div>
+        <div>{profile.availability === "unavailable" ? "🚫 Status: Unavailable" : "✅ Status: Available"}</div>
+        {profile.avail_note && <div style={{marginTop:6,padding:8,background:"rgba(0,0,0,.2)",borderRadius:6,fontSize:12,whiteSpace:"pre-wrap",color:"var(--t)"}}>📝 {profile.avail_note}</div>}
       </div>
     </div>
     {/* Edit form */}
@@ -1834,6 +1902,14 @@ function MyProfileTab({ profile, notify, refresh }) {
             {[1,2,3,4,5,6,7,8,9].map(n=><option key={n} value={n}>{n}</option>)}
           </select>
         </div>
+        <div style={{gridColumn:"1/-1",display:"flex",alignItems:"center",gap:8,padding:"4px 0"}}>
+          <input type="checkbox" id="avail-cb" checked={staffEditProf.availability === "available"} onChange={e=>setStaffEditProf(p=>({...p,availability: e.target.checked ? "available" : "unavailable"}))} style={{cursor:"pointer",width:16,height:16}} />
+          <label htmlFor="avail-cb" style={{fontSize:12,cursor:"pointer"}}>I'm available to work special events</label>
+        </div>
+        <div style={{gridColumn:"1/-1"}}>
+          <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:4}}>Note to Coordinator <span style={{opacity:.6}}>(optional — availability notes, certifications, preferences)</span></label>
+          <textarea className="fi" rows={3} value={staffEditProf.avail_note} onChange={e=>setStaffEditProf(p=>({...p,avail_note:e.target.value}))} placeholder="e.g. Off duty May 22–25, prefer evening events, ACLS certified..." style={{fontSize:13,fontFamily:"inherit",resize:"vertical",minHeight:60,width:"100%"}} />
+        </div>
       </div>
       {staffProfMsg && <div style={{fontSize:12,color:staffProfMsg.includes("✅")?"var(--g)":"var(--r)",marginBottom:8}}>{staffProfMsg}</div>}
       <button className="bt btg" style={{width:"100%",fontSize:13}} disabled={staffProfSaving} onClick={async()=>{
@@ -1844,6 +1920,8 @@ function MyProfileTab({ profile, notify, refresh }) {
         if (staffEditProf.level) updates.level = staffEditProf.level;
         if (staffEditProf.shift) updates.shift = staffEditProf.shift;
         if (staffEditProf.kelly_number) updates.kelly_number = parseInt(staffEditProf.kelly_number);
+        updates.availability = staffEditProf.availability;
+        updates.avail_note = staffEditProf.avail_note.trim();
         const { error } = await supabase.from("profiles").update(updates).eq("id", profile.id);
         setStaffProfSaving(false);
         if (error) { setStaffProfMsg("❌ " + error.message); }
