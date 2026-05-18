@@ -1179,7 +1179,8 @@ function CoordView({ profile, notify }) {
     const ac = profiles.find(p => p.id === cr.staff_id);
     const ev = events.find(e => e.id === cr.event_id);
     await logActivity("approved_cancel", "cancel_request", crId, { staffName: ac?.name, eventName: ev?.name });
-    sendNotification("cancel_decision", { staffEmail: ac?.email, staffName: ac?.name, eventName: ev?.name, decision: "approved" });
+    // Email muted May 18 2026 (Eric: no request or approval emails)
+    // sendNotification("cancel_decision", { staffEmail: ac?.email, staffName: ac?.name, eventName: ev?.name, decision: "approved" });
     // Log open slot so staff see in-app alert
     await logActivity("slot_opened", "event", ev?.id, { eventName: ev?.name, eventDate: ev?.date, timeStart: ev?.time_start, timeEnd: ev?.time_end });
     // Blast — prioritize staff already signed up (pending/denied) then all other eligible staff
@@ -1205,7 +1206,8 @@ function CoordView({ profile, notify }) {
     const ac = profiles.find(p => p.id === cr?.staff_id);
     const ev = events.find(e => e.id === cr?.event_id);
     await logActivity("denied_cancel", "cancel_request", crId, { staffName: ac?.name, eventName: ev?.name });
-    sendNotification("cancel_decision", { staffEmail: ac?.email, staffName: ac?.name, eventName: ev?.name, decision: "denied" });
+    // Email muted May 18 2026 (Eric: no request or approval emails)
+    // sendNotification("cancel_decision", { staffEmail: ac?.email, staffName: ac?.name, eventName: ev?.name, decision: "denied" });
     notify("Cancel denied."); refresh();
   };
 
@@ -2137,7 +2139,8 @@ function StaffView({ profile, notify, openHelpChat }) {
     if (existingCR) { notify("Withdrawal request already pending — awaiting coordinator approval.", "warn"); return; }
     await supabase.from("cancel_requests").insert({ staff_id: profile.id, event_id: eventId, status: "pending", requested_at: nowISO() });
     await logActivity("requested_cancel", "cancel_request", eventId, { eventName: ev?.name });
-    sendNotification("cancel_request", { staffName: profile.name, eventName: ev?.name });
+    // Email muted May 18 2026 (Eric: no request or approval emails)
+    // sendNotification("cancel_request", { staffName: profile.name, eventName: ev?.name });
     notify("Withdrawal request sent — awaiting coordinator approval.", "warn");
     refresh();
   };
