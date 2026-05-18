@@ -641,6 +641,22 @@ export default function App() {
   const [showHelpChat, setShowHelpChat] = useState(false);
   const [fabHidden, setFabHidden] = useState(false);
   const [viewAsStaff, setViewAsStaff] = useState(false);
+  const [newVersionAvailable, setNewVersionAvailable] = useState(false);
+  const initialBuildRef = useRef(null);
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const res = await fetch("/version.json?t=" + Date.now(), { cache: "no-cache" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (initialBuildRef.current === null) { initialBuildRef.current = data.build; return; }
+        if (data.build && data.build > initialBuildRef.current) setNewVersionAvailable(true);
+      } catch { /* silent — offline or 404 in dev */ }
+    };
+    check();
+    const id = setInterval(check, 60000);
+    return () => clearInterval(id);
+  }, []);
   const [theme, setTheme] = useState(() => {
     try { return localStorage.getItem("bfrs-theme") || "dark"; } catch { return "dark"; }
   });
@@ -734,6 +750,11 @@ export default function App() {
           </>
         )}
         {notif && <div className={`nf ${notif.t === "error" ? "er" : notif.t === "warn" ? "wr" : "ok"}`}>{notif.msg}</div>}
+        {newVersionAvailable && (
+          <div onClick={() => window.location.reload()} role="button" style={{position:"fixed",top:0,left:0,right:0,padding:"10px 14px",background:"var(--a)",color:"var(--bg)",fontSize:13,fontWeight:600,textAlign:"center",cursor:"pointer",zIndex:9999,boxShadow:"0 2px 8px rgba(0,0,0,.3)"}}>
+            🔄 New version available — tap to refresh
+          </div>
+        )}
       </div>
     </>
   );
@@ -878,6 +899,20 @@ function useData() {
     const onVisible = () => { if (document.visibilityState === "visible") refresh(); };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [refresh]);
+
+  // Realtime: subscribe to every table change so all open clients see updates instantly
+  useEffect(() => {
+    const channel = supabase.channel("app-data-sync")
+      .on("postgres_changes", { event: "*", schema: "public", table: "signups" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "events" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "attendance" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "cancel_requests" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "activity_log" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "feedback" }, refresh)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [refresh]);
 
   return { profiles, events, signups, attendance, cancelReqs, activityLog, feedback, loading, refresh };
@@ -2247,7 +2282,7 @@ function StaffView({ profile, notify, openHelpChat }) {
               </div>
             </div>
             {ev.notes && <div className="nts">📋 {ev.notes}</div>}
-            {(() => { const evShift = getShiftForDate(ev.date); const offDay = NEXT_SHIFT[profile.shift]; const isKelly = isKellyDay(ev.date, profile.kelly_number, profile.shift); if (isKelly) return <div className="shift-warn" style={{borderColor:"rgba(74,222,128,.3)",color:"var(--g)"}}>🟢 This is your Kelly Day — you're off duty this date.</div>; if (evShift === profile.shift) return <div className="shift-warn">⚠️ Reminder: You will be on regular duty (Shift {profile.shift}) this day.</div>; if (evShift === offDay && ev.time_start < "08:00") return <div className="shift-warn">⚠️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts before 0800 — you may arrive late.</div>; if (evShift === offDay) return <div className="shift-warn" style={{borderColor:"rgba(0,212,255,.2)",color:"var(--a)"}}>ℹ️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts after your shift ends.</div>; return null; })()}
+            {(() => { const evShift = getShiftForDate(ev.date); const offDay = NEXT_SHIFT[profile.shift]; const isKelly = isKellyDay(ev.date, profile.kelly_number, profile.shift); if (isKelly) return <div className="shift-warn" style={{borderColor:"rgba(74,222,128,.3)",color:"var(--g)"}}>🟢 This is your Kelly Day — you're off duty and available to work this event.</div>; if (evShift === profile.shift) return <div className="shift-warn">⚠️ Reminder: You will be on regular duty (Shift {profile.shift}) this day.</div>; if (evShift === offDay && ev.time_start < "08:00") return <div className="shift-warn">⚠️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts before 0800 — you may arrive late.</div>; if (evShift === offDay) return <div className="shift-warn" style={{borderColor:"rgba(0,212,255,.2)",color:"var(--a)"}}>ℹ️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts after your shift ends.</div>; return null; })()}
             {hasConflict && !isMine && <div className="shift-warn">⚡ Overlaps with: {conflicts.map(c => c.name).join(", ")}. You can still sign up — coordinator will decide which event to assign you.</div>}
             {/* Slot bars hidden from staff view */}
             {myAttRec && (
@@ -2287,7 +2322,7 @@ function StaffView({ profile, notify, openHelpChat }) {
               </div>
             </div>
             {ev.notes && <div className="nts">📋 {ev.notes}</div>}
-            {(() => { const evShift = getShiftForDate(ev.date); const offDay = NEXT_SHIFT[profile.shift]; const isKelly = isKellyDay(ev.date, profile.kelly_number, profile.shift); if (isKelly) return <div className="shift-warn" style={{borderColor:"rgba(74,222,128,.3)",color:"var(--g)"}}>🟢 This is your Kelly Day — you're off duty this date.</div>; if (evShift === profile.shift) return <div className="shift-warn">⚠️ Reminder: You will be on regular duty (Shift {profile.shift}) this day.</div>; if (evShift === offDay && ev.time_start < "08:00") return <div className="shift-warn">⚠️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts before 0800 — you may arrive late.</div>; if (evShift === offDay) return <div className="shift-warn" style={{borderColor:"rgba(0,212,255,.2)",color:"var(--a)"}}>ℹ️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts after your shift ends.</div>; return null; })()}
+            {(() => { const evShift = getShiftForDate(ev.date); const offDay = NEXT_SHIFT[profile.shift]; const isKelly = isKellyDay(ev.date, profile.kelly_number, profile.shift); if (isKelly) return <div className="shift-warn" style={{borderColor:"rgba(74,222,128,.3)",color:"var(--g)"}}>🟢 This is your Kelly Day — you're off duty and available to work this event.</div>; if (evShift === profile.shift) return <div className="shift-warn">⚠️ Reminder: You will be on regular duty (Shift {profile.shift}) this day.</div>; if (evShift === offDay && ev.time_start < "08:00") return <div className="shift-warn">⚠️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts before 0800 — you may arrive late.</div>; if (evShift === offDay) return <div className="shift-warn" style={{borderColor:"rgba(0,212,255,.2)",color:"var(--a)"}}>ℹ️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts after your shift ends.</div>; return null; })()}
             {myAttRec && (
               <div style={{ marginTop: 8, fontSize: 11, color: "var(--t2)", fontFamily: "'DM Mono', monospace" }}>
                 In: {fmtDateTime(myAttRec.sign_in_time)}{myAttRec.sign_out_time && ` · Out: ${fmtDateTime(myAttRec.sign_out_time)} · ${calcHours(myAttRec.sign_in_time, myAttRec.sign_out_time)} hrs`}
