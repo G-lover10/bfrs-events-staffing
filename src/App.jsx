@@ -873,8 +873,10 @@ function SignupBadge({status}){const s=SIGNUP_STATUS[status]||SIGNUP_STATUS.pend
 // ─── SMART SIGNUP SCORER ─────────────────────────────────────────────────────
 // Scores each pending signup to recommend best approvals for an event.
 // Criteria: credential match, not on duty, fewer events this month, sign-up order.
-// Payday Fridays every 14 days from May 1, 2026
-const PAYDAY_REF = new Date("2026-05-01T00:00:00");
+// First real payday Friday — May 15, 2026. May 1 was period END (paid May 15), NOT a payday.
+// Per Notion design spec "Pay Period Hours View": Apr 18–May 1 → paid May 15, then biweekly.
+const PAYDAY_REF = new Date("2026-05-15T00:00:00");
+const PERIOD_END_REF = new Date("2026-05-01T00:00:00");
 const isPaydayFriday = (dateStr) => {
   if (!dateStr) return false;
   const d = new Date(dateStr + "T00:00:00");
@@ -883,14 +885,35 @@ const isPaydayFriday = (dateStr) => {
   return diffDays >= 0 && diffDays % 14 === 0;
 };
 
-// First payday Friday on or after event date — which paycheck the event pays out on
+// Which paycheck an event pays out on: payday = end-of-period + 14 days.
+// Anchors on PERIOD_END_REF (May 1) so May 2 → May 29 check, not May 15.
 const getPaydayForDate = (dateStr) => {
   if (!dateStr) return null;
   const d = new Date(dateStr + "T00:00:00");
-  const pay = new Date(PAYDAY_REF);
-  while (pay < d) pay.setDate(pay.getDate() + 14);
-  const y = pay.getFullYear(), m = String(pay.getMonth() + 1).padStart(2, "0"), dd = String(pay.getDate()).padStart(2, "0");
+  const periodEnd = new Date(PERIOD_END_REF);
+  while (periodEnd < d) periodEnd.setDate(periodEnd.getDate() + 14);
+  const payday = new Date(periodEnd);
+  payday.setDate(payday.getDate() + 14);
+  const y = payday.getFullYear(), m = String(payday.getMonth() + 1).padStart(2, "0"), dd = String(payday.getDate()).padStart(2, "0");
   return `${y}-${m}-${dd}`;
+};
+
+// Returns { start, end, payday, checkLabel, rangeLabel } for the pay period containing dateStr.
+const getPayPeriodForDate = (dateStr) => {
+  if (!dateStr) return null;
+  const d = new Date(dateStr + "T00:00:00");
+  const periodEnd = new Date(PERIOD_END_REF);
+  while (periodEnd < d) periodEnd.setDate(periodEnd.getDate() + 14);
+  const payday = new Date(periodEnd);
+  payday.setDate(payday.getDate() + 14);
+  const periodStart = new Date(periodEnd);
+  periodStart.setDate(periodStart.getDate() - 13);
+  const iso = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+  const sm = periodStart.toLocaleDateString("en-US", { month: "short" });
+  const em = periodEnd.toLocaleDateString("en-US", { month: "short" });
+  const rangeLabel = (sm === em) ? `${sm} ${periodStart.getDate()}–${periodEnd.getDate()}` : `${sm} ${periodStart.getDate()}–${em} ${periodEnd.getDate()}`;
+  const checkLabel = `${payday.toLocaleDateString("en-US", { month: "short" })} ${payday.getDate()} Check`;
+  return { start: iso(periodStart), end: iso(periodEnd), payday: iso(payday), checkLabel, rangeLabel };
 };
 
 // Kelly Day reference dates (OD1 for each shift in 2026)
@@ -1838,6 +1861,16 @@ function MyProfileTab({ profile, notify, refresh }) {
 function StaffView({ profile, notify, openHelpChat }) {
   const { profiles, events, signups, attendance, cancelReqs, activityLog, loading, refresh } = useData();
   const [tab, setTab] = useState("events");
+  const [expandedPeriods, setExpandedPeriods] = useState(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const p = getPayPeriodForDate(today);
+    return new Set(p ? [p.payday] : []);
+  });
+  const togglePeriod = (payday) => setExpandedPeriods(prev => {
+    const next = new Set(prev);
+    if (next.has(payday)) next.delete(payday); else next.add(payday);
+    return next;
+  });
 
   const mySignups = signups.filter(s => s.staff_id === profile.id && (s.status === "confirmed" || s.status === "pending"));
   // Open slot alerts — events with a slot opened in last 24hrs that I haven't signed up for
@@ -1863,6 +1896,55 @@ function StaffView({ profile, notify, openHelpChat }) {
       return sum + eventHours(ev);
     }, 0);
   }, [mySignups, events]);
+
+  const monthGroups = useMemo(() => {
+    const byPayday = new Map();
+    const todayISO = new Date().toISOString().slice(0, 10);
+    mySignups.filter(s => s.status === "confirmed").forEach(s => {
+      const ev = events.find(e => e.id === s.event_id);
+      if (!ev || !ev.date) return;
+      const period = getPayPeriodForDate(ev.date);
+      if (!period) return;
+      if (!byPayday.has(period.payday)) byPayday.set(period.payday, { period, events: [], orphans: [] });
+      const slot = byPayday.get(period.payday);
+      const scheduled = eventHours(ev);
+      const att = myAtt.find(a => a.event_id === ev.id);
+      let status, worked = 0;
+      if (att?.sign_in_time && att?.sign_out_time) { status = "worked"; worked = parseFloat(calcHours(att.sign_in_time, att.sign_out_time)) || 0; }
+      else if (att?.sign_in_time) { status = "in_progress"; }
+      else { status = (ev.date < todayISO) ? "missed" : "upcoming"; }
+      slot.events.push({ ev, scheduled, worked, status, att });
+    });
+    myAtt.forEach(a => {
+      const ev = events.find(e => e.id === a.event_id);
+      if (ev && ev.date) return;
+      if (!a.sign_in_time) return;
+      const isoDate = new Date(a.sign_in_time).toISOString().slice(0, 10);
+      const period = getPayPeriodForDate(isoDate);
+      if (!period) return;
+      if (!byPayday.has(period.payday)) byPayday.set(period.payday, { period, events: [], orphans: [] });
+      byPayday.get(period.payday).orphans.push(a);
+    });
+    const periodsSorted = [...byPayday.values()].map(slot => {
+      const scheduled = slot.events.reduce((s, e) => s + e.scheduled, 0);
+      const eventsWorked = slot.events.reduce((s, e) => s + e.worked, 0);
+      const orphansWorked = slot.orphans.reduce((s, o) => s + (o.sign_out_time ? (parseFloat(calcHours(o.sign_in_time, o.sign_out_time)) || 0) : 0), 0);
+      return { ...slot.period, scheduled, worked: eventsWorked + orphansWorked, events: slot.events.sort((a, b) => (a.ev.date || "").localeCompare(b.ev.date || "")), orphans: slot.orphans };
+    }).sort((a, b) => a.payday.localeCompare(b.payday));
+    const months = new Map();
+    periodsSorted.forEach(p => {
+      const key = p.payday.slice(0, 7);
+      if (!months.has(key)) {
+        const dt = new Date(p.payday + "T00:00:00");
+        months.set(key, { key, label: dt.toLocaleDateString("en-US", { month: "long", year: "numeric" }), periods: [], scheduled: 0, worked: 0 });
+      }
+      const m = months.get(key);
+      m.periods.push(p);
+      m.scheduled += p.scheduled;
+      m.worked += p.worked;
+    });
+    return [...months.values()];
+  }, [mySignups, events, myAtt]);
 
   const signUpForEvent = async (eventId) => {
     const ev = events.find(e => e.id === eventId);
@@ -2040,18 +2122,56 @@ function StaffView({ profile, notify, openHelpChat }) {
 
     {/* ── MY HOURS ── */}
     {tab === "hours" && <>
-      <div className="stw">
-        <div className="stc"><div className="sv sa">{myScheduledHours.toFixed(1)}</div><div className="svl">Scheduled Hrs</div></div>
-        <div className="stc"><div className="sv sg">{myTotalHours.toFixed(1)}</div><div className="svl">Worked Hrs</div></div>
-        <div className="stc"><div className="sv sy">{myAtt.filter(a => !a.sign_out_time).length}</div><div className="svl">Active</div></div>
-      </div>
-      <div className="cd"><table className="lt">
-        <thead><tr><th>Event</th><th>Date</th><th>Pays</th><th>Clock In</th><th>Clock Out</th><th>Hrs</th></tr></thead>
-        <tbody>{myAtt.map(a => {
-          const ev = events.find(x => x.id === a.event_id);
-          return (<tr key={a.id}><td>{ev?.name || "?"}</td><td>{fmtDate(ev?.date)}</td><td>{fmtDate(getPaydayForDate(ev?.date))}</td><td>{fmtDateTime(a.sign_in_time)}</td><td>{a.sign_out_time ? fmtDateTime(a.sign_out_time) : <span className="bg si">Active</span>}</td><td>{a.sign_out_time ? calcHours(a.sign_in_time, a.sign_out_time) + " hrs" : "—"}</td></tr>);
-        })}</tbody>
-      </table></div>
+      {myAtt.filter(a => !a.sign_out_time).length > 0 && (
+        <div className="cd" style={{padding:"10px 14px",marginBottom:14,background:"rgba(255,217,61,.08)",borderColor:"rgba(255,217,61,.3)"}}>
+          ⏳ You have {myAtt.filter(a => !a.sign_out_time).length} active clock-in{myAtt.filter(a => !a.sign_out_time).length === 1 ? "" : "s"}.
+        </div>
+      )}
+      {monthGroups.length === 0 && <div className="ey"><div className="ei">⏱️</div>No confirmed events yet — sign up for events and they'll show here grouped by pay period.</div>}
+      {monthGroups.map(month => (
+        <div key={month.key} style={{marginBottom:24}}>
+          <div style={{fontSize:14,fontWeight:600,color:"var(--t)",padding:"8px 4px",borderBottom:"1px solid var(--bd)",marginBottom:8}}>
+            📅 {month.label} Total — <span style={{color:"var(--a)"}}>{month.scheduled.toFixed(1)} hrs scheduled</span> | <span style={{color:"var(--g)"}}>{month.worked.toFixed(1)} hrs worked</span>
+          </div>
+          {month.periods.map(p => {
+            const open = expandedPeriods.has(p.payday);
+            return (
+              <div key={p.payday} className="cd" style={{marginBottom:10,padding:0,overflow:"hidden"}}>
+                <button onClick={() => togglePeriod(p.payday)} style={{width:"100%",padding:"12px 14px",background:"transparent",border:"none",borderBottom: open ? "1px solid var(--bd)" : "none",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",color:"var(--t)",fontFamily:"inherit",textAlign:"left",gap:8,flexWrap:"wrap"}}>
+                  <span style={{fontWeight:600}}>💰 {p.checkLabel} <span style={{color:"var(--t2)",fontWeight:400,fontSize:12}}>({p.rangeLabel})</span></span>
+                  <span style={{color:"var(--t2)",fontSize:12}}>{p.scheduled.toFixed(1)} sched | {p.worked.toFixed(1)} worked <span style={{marginLeft:6}}>{open ? "▾" : "▸"}</span></span>
+                </button>
+                {open && p.events.map(row => {
+                  const ev = row.ev;
+                  const isTBA = !ev.time_start || ev.time_start === "TBA";
+                  return (
+                    <div key={ev.id} style={{padding:"10px 14px",borderTop:"1px solid var(--bd)"}}>
+                      <div style={{fontWeight:600,fontSize:14}}>{ev.name}</div>
+                      <div style={{fontSize:12,color:"var(--t2)",marginTop:2}}>
+                        {fmtDate(ev.date)} · {isTBA ? "Time TBA" : `${fmtTime(ev.time_start)}–${fmtTime(ev.time_end)}`} · 📅 {row.scheduled.toFixed(1)} hrs scheduled
+                      </div>
+                      <div style={{fontSize:12,marginTop:4}}>
+                        {row.status === "worked" && <span style={{color:"var(--g)"}}>✅ Worked: {row.worked.toFixed(1)} hrs <span style={{color:"var(--t2)",fontFamily:"'DM Mono',monospace"}}>· {fmtDateTime(row.att.sign_in_time)} → {fmtDateTime(row.att.sign_out_time)}</span></span>}
+                        {row.status === "in_progress" && <span style={{color:"var(--a)"}}>⏳ In progress — clocked in {fmtDateTime(row.att.sign_in_time)}</span>}
+                        {row.status === "missed" && <span style={{color:"var(--r)"}}>⚠️ Past event — not clocked in</span>}
+                        {row.status === "upcoming" && <span style={{color:"var(--t2)"}}>— Not clocked in yet</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+                {open && p.orphans.map((a, i) => (
+                  <div key={`o-${i}`} style={{padding:"10px 14px",borderTop:"1px solid var(--bd)",background:"rgba(248,113,113,.05)"}}>
+                    <div style={{fontWeight:600,fontSize:14,color:"var(--r)"}}>⚠️ Unknown event (deleted from system)</div>
+                    <div style={{fontSize:11,color:"var(--t2)",marginTop:2,fontFamily:"'DM Mono',monospace"}}>
+                      Clock in: {fmtDateTime(a.sign_in_time)}{a.sign_out_time && ` → ${fmtDateTime(a.sign_out_time)} (${calcHours(a.sign_in_time, a.sign_out_time)} hrs)`}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </>}
 
     {/* ── CANCEL REQUESTS ── */}
