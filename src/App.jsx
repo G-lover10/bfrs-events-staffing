@@ -763,8 +763,8 @@ function Auth({ onLogin, notify, theme, toggleTheme }) {
       }, { onConflict: "id" });
     }
     setBusy(false);
-    // Fire notification to coordinators
-    sendNotification("new_registration", { name, email: email.trim(), level, shift, phone });
+    // Per Notion email-status policy (May 16 2026), new_registration emails are OFF.
+    // sendNotification("new_registration", { name, email: email.trim(), level, shift, phone });
     notify("Registration submitted — awaiting coordinator approval.");
   };
 
@@ -963,7 +963,8 @@ function CoordView({ profile, notify }) {
     const { error } = await supabase.from("profiles").update({ approved: true }).eq("id", id);
     if (error) { notify(error.message, "error"); return; }
     await logActivity("approved_account", "profile", id, { name: acc?.name });
-    sendNotification("account_approved", { name: acc?.name, email: acc?.email });
+    // Per Notion email-status policy (May 16 2026), account_approved emails are OFF.
+    // sendNotification("account_approved", { name: acc?.name, email: acc?.email });
     notify("Account approved."); refresh();
   };
   const approveAll = async () => {
@@ -973,7 +974,8 @@ function CoordView({ profile, notify }) {
     if (error) { notify(error.message, "error"); return; }
     for (const acc of pendingAccounts) {
       await logActivity("approved_account", "profile", acc.id, { name: acc.name });
-      sendNotification("account_approved", { name: acc.name, email: acc.email });
+      // Per Notion email-status policy (May 16 2026), account_approved emails are OFF.
+      // sendNotification("account_approved", { name: acc.name, email: acc.email });
     }
     notify(`${pendingAccounts.length} accounts approved.`); refresh();
   };
@@ -1740,7 +1742,7 @@ function StaffView({ profile, notify }) {
     const yesterday = new Date(Date.now() - 86400000).toISOString();
     return activityLog
       .filter(a => a.action === "slot_opened" && a.created_at > yesterday)
-      .map(a => a.record_id)
+      .map(a => a.target_id)
       .filter(evId => !mySignups.find(s => s.event_id === evId));
   }, [activityLog, mySignups]);
   const myAtt = attendance.filter(a => a.staff_id === profile.id);
@@ -1961,6 +1963,7 @@ function StaffView({ profile, notify }) {
         name: profile.name||"", email: profile.email||"", phone: profile.phone||"",
         level: profile.level||"", shift: profile.shift||"", kelly_number: profile.kelly_number||""
       });
+      const [showPwModal, setShowPwModal] = React.useState(false);
       return (<>
         <div className="sct">👤 My Profile</div>
         {/* Current info */}
@@ -2029,8 +2032,9 @@ function StaffView({ profile, notify }) {
         </div>
         {/* Change Password */}
         <div style={{marginTop:12}}>
-          <ChangePasswordModal profile={profile} />
+          <button className="bt bp" style={{width:"100%",fontSize:13}} onClick={() => setShowPwModal(true)}>🔑 Change Password</button>
         </div>
+        {showPwModal && <ChangePassword onClose={() => setShowPwModal(false)} notify={notify} />}
       </>);
     })()}
   </>);
