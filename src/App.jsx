@@ -17,7 +17,7 @@ const SIGNUP_STATUS = {pending:{label:"⏳ Pending",cls:"pc"},confirmed:{label:"
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 const nowISO = () => new Date().toISOString();
-const fmtDate = (d) => { if (!d) return "—"; const dt = new Date(d + "T00:00:00"); return dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
+const fmtDate = (d) => { if (!d) return "—"; const dt = new Date(d + "T00:00:00"); return dt.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }); };
 const fmtTime = (t) => { if (!t) return ""; const [h, m] = t.split(":"); const hr = parseInt(h); return `${hr > 12 ? hr - 12 : hr || 12}:${m} ${hr >= 12 ? "PM" : "AM"}`; };
 const fmtDateTime = (iso) => { if (!iso) return "—"; const d = new Date(iso); return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); };
 const fmtFull = (iso) => { if (!iso) return "—"; const d = new Date(iso); return d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" }); };
@@ -363,7 +363,7 @@ body{background:var(--bg);color:var(--t);font-family:'DM Sans',sans-serif;min-he
 .promo-btn{background:none;border:1px solid var(--a);color:var(--a);padding:3px 8px;border-radius:4px;font-size:10px;cursor:pointer;font-family:'DM Mono',monospace}.promo-btn:hover{background:var(--a);color:var(--bg)}
 .demote-btn{background:none;border:1px solid var(--r);color:var(--r);padding:3px 8px;border-radius:4px;font-size:10px;cursor:pointer;font-family:'DM Mono',monospace}.demote-btn:hover{background:var(--r);color:#fff}
 .bulk-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
-.fab-group{position:fixed;bottom:20px;left:16px;display:flex;flex-direction:column;align-items:center;gap:8px;z-index:800}.fab-label{font-size:9px;color:var(--t2);text-transform:uppercase;letter-spacing:1px;font-family:'DM Mono',monospace;text-align:center}.fb-fab{width:44px;height:44px;border-radius:22px;background:var(--a);color:var(--bg);border:none;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.3);transition:transform .2s}.fb-fab:hover{transform:scale(1.1)}.help-fab{width:44px;height:44px;border-radius:22px;background:var(--g);color:var(--bg);border:none;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.3);transition:transform .2s}.help-fab:hover{transform:scale(1.1)}
+.fab-group{position:fixed;bottom:20px;left:16px;display:flex;flex-direction:column;align-items:center;gap:8px;z-index:800}.fab-label{font-size:9px;color:var(--t2);text-transform:uppercase;letter-spacing:1px;font-family:'DM Mono',monospace;text-align:center}.fb-fab{width:44px;height:44px;border-radius:22px;background:var(--a);color:var(--bg);border:none;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.3);transition:transform .2s}.fb-fab:hover{transform:scale(1.1)}.help-fab{width:44px;height:44px;border-radius:22px;background:var(--g);color:var(--bg);border:none;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.3);transition:transform .2s}.help-fab:hover{transform:scale(1.1)}.fab-close{align-self:flex-end;width:20px;height:20px;border-radius:10px;background:var(--bg);border:1px solid var(--bd);color:var(--t2);font-size:12px;line-height:1;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;font-family:sans-serif}.fab-close:hover{color:var(--r);border-color:var(--r)}.fab-show{position:fixed;bottom:24px;left:0;width:22px;height:46px;border-radius:0 12px 12px 0;background:var(--g);color:var(--bg);border:none;font-size:16px;cursor:pointer;z-index:800;box-shadow:2px 2px 8px rgba(0,0,0,.3);opacity:.6;padding:0;font-family:sans-serif}.fab-show:hover{opacity:1}
 .fb-type{display:flex;gap:6px;margin-bottom:14px}.fb-type button{flex:1;padding:8px;border-radius:8px;border:1px solid var(--bd);background:var(--s2);color:var(--t2);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif}.fb-type button.act{border-color:var(--a);color:var(--a);background:rgba(0,212,255,.1)}
 .fb-item{background:var(--s);border:1px solid var(--bd);border-radius:10px;padding:12px;margin-bottom:8px}
 .slot-badge{background:rgba(239,68,68,.15);color:var(--r);border:1px solid var(--r);border-radius:6px;padding:2px 8px;font-size:10px;font-family:'DM Mono',monospace;animation:pulse 1.5s infinite}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
@@ -638,6 +638,7 @@ export default function App() {
   const [showPwModal, setShowPwModal] = useState(false);
   const [showFbModal, setShowFbModal] = useState(false);
   const [showHelpChat, setShowHelpChat] = useState(false);
+  const [fabHidden, setFabHidden] = useState(false);
   const [viewAsStaff, setViewAsStaff] = useState(false);
   const [theme, setTheme] = useState(() => {
     try { return localStorage.getItem("bfrs-theme") || "dark"; } catch { return "dark"; }
@@ -693,12 +694,18 @@ export default function App() {
             {showPwModal && <ChangePassword onClose={() => setShowPwModal(false)} notify={notify} />}
             {showFbModal && <FeedbackModal onClose={() => setShowFbModal(false)} notify={notify} userId={profile.id} userName={profile.name} />}
             {showHelpChat && <HelpChat onClose={() => setShowHelpChat(false)} />}
-            <div className="fab-group">
-              <div className="fab-label">Help</div>
-              <button className="help-fab" onClick={() => { setShowHelpChat(h => !h); setShowFbModal(false); }} title="App Help">🤖</button>
-              <button className="fb-fab" onClick={() => { setShowFbModal(true); setShowHelpChat(false); }} title="Send Feedback">💬</button>
-              <div className="fab-label">Feedback</div>
-            </div>
+            {!fabHidden && (
+              <div className="fab-group">
+                <button className="fab-close" onClick={() => setFabHidden(true)} title="Hide help/feedback buttons">×</button>
+                <div className="fab-label">Help</div>
+                <button className="help-fab" onClick={() => { setShowHelpChat(h => !h); setShowFbModal(false); }} title="App Help">🤖</button>
+                <button className="fb-fab" onClick={() => { setShowFbModal(true); setShowHelpChat(false); }} title="Send Feedback">💬</button>
+                <div className="fab-label">Feedback</div>
+              </div>
+            )}
+            {fabHidden && (
+              <button className="fab-show" onClick={() => setFabHidden(false)} title="Show help/feedback buttons">›</button>
+            )}
             <main className="mn">
               {profile.role === "coordinator" && !viewAsStaff
                 ? <CoordView profile={profile} notify={notify} />
@@ -1915,7 +1922,7 @@ function StaffView({ profile, notify, openHelpChat }) {
 
   return (<>
     <div className="tabs">
-      <button className={`tb${tab === "events" ? " on" : ""}`} onClick={() => setTab("events")}>All Events</button>
+      <button className={`tb${tab === "events" ? " on" : ""}`} onClick={() => setTab("events")}>Dashboard</button>
       <button className={`tb${tab === "my" ? " on" : ""}`} onClick={() => setTab("my")}>My Events ({mySignups.length})</button>
       <button className={`tb${tab === "hours" ? " on" : ""}`} onClick={() => setTab("hours")}>My Hours</button>
       <button className={`tb${tab === "cr" ? " on" : ""}`} onClick={() => setTab("cr")}>Cancel Reqs{pendingCRCount > 0 && <span className="nd or">{pendingCRCount}</span>}</button>
