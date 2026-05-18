@@ -9,6 +9,10 @@ exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") return { statusCode: 200, headers: CORS, body: "" };
   if (event.httpMethod !== "POST") return { statusCode: 405, headers: CORS, body: JSON.stringify({ error: "Method not allowed" }) };
 
+  if (!process.env.GROQ_KEY) {
+    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: { message: "GROQ_KEY environment variable is not set in Netlify" } }) };
+  }
+
   try {
     const { messages, system } = JSON.parse(event.body);
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
