@@ -991,6 +991,7 @@ function CoordView({ profile, notify }) {
   const [tab, setTab] = useState("dash");
   const [addEv, setAddEv] = useState({ name: "", date: "", time_start: "", time_end: "", location: "", venue: "", notes: "", needed_paramedics: 2, needed_emts: 2 });
   const [selEv, setSelEv] = useState(null);
+  const [addStaffSel, setAddStaffSel] = useState("");
   const [editEv, setEditEv] = useState(null);
   const fileRef = useRef(null);
   const [upRes, setUpRes] = useState(null);
@@ -1107,6 +1108,27 @@ function CoordView({ profile, notify }) {
     const ac = profiles.find(p => p.id === staffId);
     await logActivity("removed_signup", "signup", eventId, { staffName: ac?.name });
     notify("Signup removed."); refresh();
+  };
+  const manuallyAddStaff = async (eventId, staffId) => {
+    if (!staffId) return;
+    const ev = events.find(e => e.id === eventId);
+    const ac = profiles.find(p => p.id === staffId);
+    if (!ac) { notify("Staff not found.", "error"); return; }
+    if (signups.find(s => s.event_id === eventId && s.staff_id === staffId && s.status !== "cancelled")) {
+      notify(`${ac.name} is already signed up for this event.`, "warn");
+      return;
+    }
+    const conflicts = findConflicts(eventId, staffId, events, signups);
+    if (conflicts.length > 0) {
+      const c = conflicts[0];
+      if (!confirm(`${ac.name} is already confirmed for "${c.name}" (${fmtDate(c.date)} ${fmtTime(c.time_start)}–${fmtTime(c.time_end)}) which overlaps with this event.\n\nAdd anyway?`)) return;
+    }
+    const { error } = await supabase.from("signups").insert({ staff_id: staffId, event_id: eventId, status: "confirmed", signed_up_at: nowISO() });
+    if (error) { notify("Add error: " + error.message, "error"); return; }
+    await logActivity("manually_added", "signup", eventId, { staffName: ac.name, eventName: ev?.name });
+    notify(`${ac.name} added to ${ev?.name}.`);
+    setAddStaffSel("");
+    refresh();
   };
   const approveSignup = async (signupId) => {
     const su = signups.find(s => s.id === signupId);
@@ -1524,6 +1546,22 @@ function CoordView({ profile, notify }) {
                       </div>
                     );
                   })}
+                  <div className="dv" />
+                  <div style={{margin:"4px 0",padding:12,background:"var(--s)",border:"1px dashed var(--bd)",borderRadius:8}}>
+                    <div style={{fontSize:12,fontWeight:600,marginBottom:4}}>➕ Add Staff Manually</div>
+                    <div style={{fontSize:10,color:"var(--t2)",marginBottom:8}}>Use this when Chief tells you someone is working but they haven't signed up through the app. Added staff are confirmed immediately — no pending step.</div>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                      <select className="fi" value={addStaffSel} onChange={e=>setAddStaffSel(e.target.value)} style={{flex:"1 1 200px",fontSize:13,minWidth:0}}>
+                        <option value="">— Select staff —</option>
+                        {profiles
+                          .filter(p => p.role === "staff" && p.approved && !signups.find(s => s.event_id === ev.id && s.staff_id === p.id && s.status !== "cancelled"))
+                          .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+                          .map(p => <option key={p.id} value={p.id}>{p.name} ({p.level || "—"} · Shift {p.shift || "?"})</option>)
+                        }
+                      </select>
+                      <button className="bt btg" disabled={!addStaffSel} onClick={() => manuallyAddStaff(ev.id, addStaffSel)} style={{whiteSpace:"nowrap"}}>Add</button>
+                    </div>
+                  </div>
                 </div>
               )}
             </>)}
@@ -1721,14 +1759,12 @@ function CoordView({ profile, notify }) {
           const key = s.staff_id + "|" + s.event_id;
           if (seen.has(key)) dupSignups.push(s); else seen.add(key);
         });
-        const orphanAtt = attendance.filter(a => !events.find(e => e.id === a.event_id));
         const noSignupStaff = profiles.filter(p => p.approved && p.role === "staff" && !signups.find(s => s.staff_id === p.id));
         const missingFields = events.filter(e => !e.time_start || e.time_start === "TBA" || !e.time_end || e.time_end === "TBA" || (!e.venue && !e.location));
         const ghostSignups = signups.filter(s => !events.find(e => e.id === s.event_id));
 
         const issues = [
           { id: "dup", label: "Duplicate signups (same staff + event)", count: dupSignups.length, color: "var(--r)", details: dupSignups.slice(0, 5).map(s => { const ev = events.find(e => e.id === s.event_id); const p = profiles.find(x => x.id === s.staff_id); return `${p?.name || "?"} → ${ev?.name || "?"} (${s.status})`; }) },
-          { id: "orphan", label: "Orphan attendance records (event deleted)", count: orphanAtt.length, color: "var(--o)", details: orphanAtt.slice(0, 5).map(a => { const p = profiles.find(x => x.id === a.staff_id); return `${p?.name || "?"} · clocked in ${fmtDateTime(a.sign_in_time)}`; }) },
           { id: "nosignup", label: "Approved staff with zero signups", count: noSignupStaff.length, color: "var(--y)", details: noSignupStaff.slice(0, 10).map(p => `${p.name} (${p.level || "?"})`) },
           { id: "missing", label: "Events missing time or venue", count: missingFields.length, color: "var(--y)", details: missingFields.slice(0, 5).map(e => `${e.name} (${fmtDate(e.date)})`) },
           { id: "ghost", label: "Signups for deleted events", count: ghostSignups.length, color: "var(--r)", details: ghostSignups.slice(0, 5).map(s => { const p = profiles.find(x => x.id === s.staff_id); return `${p?.name || "?"} · event ID ${s.event_id}`; }) },
@@ -2147,7 +2183,7 @@ function StaffView({ profile, notify, openHelpChat }) {
               </div>
             </div>
             {ev.notes && <div className="nts">📋 {ev.notes}</div>}
-            {(() => { const evShift = getShiftForDate(ev.date); const offDay = NEXT_SHIFT[profile.shift]; if (evShift === profile.shift) return <div className="shift-warn">⚠️ Reminder: You will be on regular duty (Shift {profile.shift}) this day.</div>; if (evShift === offDay && ev.time_start < "08:00") return <div className="shift-warn">⚠️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts before 0800 — you may arrive late.</div>; if (evShift === offDay) return <div className="shift-warn" style={{borderColor:"rgba(0,212,255,.2)",color:"var(--a)"}}>ℹ️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts after your shift ends.</div>; return null; })()}
+            {(() => { const evShift = getShiftForDate(ev.date); const offDay = NEXT_SHIFT[profile.shift]; const isKelly = isKellyDay(ev.date, profile.kelly_number, profile.shift); if (isKelly) return <div className="shift-warn" style={{borderColor:"rgba(74,222,128,.3)",color:"var(--g)"}}>🟢 This is your Kelly Day — you're off duty this date.</div>; if (evShift === profile.shift) return <div className="shift-warn">⚠️ Reminder: You will be on regular duty (Shift {profile.shift}) this day.</div>; if (evShift === offDay && ev.time_start < "08:00") return <div className="shift-warn">⚠️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts before 0800 — you may arrive late.</div>; if (evShift === offDay) return <div className="shift-warn" style={{borderColor:"rgba(0,212,255,.2)",color:"var(--a)"}}>ℹ️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts after your shift ends.</div>; return null; })()}
             {hasConflict && !isMine && <div className="shift-warn">⚡ Overlaps with: {conflicts.map(c => c.name).join(", ")}. You can still sign up — coordinator will decide which event to assign you.</div>}
             {/* Slot bars hidden from staff view */}
             {myAttRec && (
@@ -2187,7 +2223,7 @@ function StaffView({ profile, notify, openHelpChat }) {
               </div>
             </div>
             {ev.notes && <div className="nts">📋 {ev.notes}</div>}
-            {(() => { const evShift = getShiftForDate(ev.date); const offDay = NEXT_SHIFT[profile.shift]; if (evShift === profile.shift) return <div className="shift-warn">⚠️ Reminder: You will be on regular duty (Shift {profile.shift}) this day.</div>; if (evShift === offDay && ev.time_start < "08:00") return <div className="shift-warn">⚠️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts before 0800 — you may arrive late.</div>; if (evShift === offDay) return <div className="shift-warn" style={{borderColor:"rgba(0,212,255,.2)",color:"var(--a)"}}>ℹ️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts after your shift ends.</div>; return null; })()}
+            {(() => { const evShift = getShiftForDate(ev.date); const offDay = NEXT_SHIFT[profile.shift]; const isKelly = isKellyDay(ev.date, profile.kelly_number, profile.shift); if (isKelly) return <div className="shift-warn" style={{borderColor:"rgba(74,222,128,.3)",color:"var(--g)"}}>🟢 This is your Kelly Day — you're off duty this date.</div>; if (evShift === profile.shift) return <div className="shift-warn">⚠️ Reminder: You will be on regular duty (Shift {profile.shift}) this day.</div>; if (evShift === offDay && ev.time_start < "08:00") return <div className="shift-warn">⚠️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts before 0800 — you may arrive late.</div>; if (evShift === offDay) return <div className="shift-warn" style={{borderColor:"rgba(0,212,255,.2)",color:"var(--a)"}}>ℹ️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts after your shift ends.</div>; return null; })()}
             {myAttRec && (
               <div style={{ marginTop: 8, fontSize: 11, color: "var(--t2)", fontFamily: "'DM Mono', monospace" }}>
                 In: {fmtDateTime(myAttRec.sign_in_time)}{myAttRec.sign_out_time && ` · Out: ${fmtDateTime(myAttRec.sign_out_time)} · ${calcHours(myAttRec.sign_in_time, myAttRec.sign_out_time)} hrs`}
