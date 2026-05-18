@@ -22,6 +22,7 @@ const fmtTime = (t) => { if (!t) return ""; const [h, m] = t.split(":"); const h
 const fmtDateTime = (iso) => { if (!iso) return "—"; const d = new Date(iso); return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); };
 const fmtFull = (iso) => { if (!iso) return "—"; const d = new Date(iso); return d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" }); };
 const calcHours = (inT, outT) => { if (!inT || !outT) return "0.0"; return ((new Date(outT) - new Date(inT)) / 3600000).toFixed(1); };
+const eventHours = (ev) => { if (!ev || !ev.time_start || !ev.time_end || ev.time_start === "TBA" || ev.time_end === "TBA") return 0; const [sh, sm] = ev.time_start.split(":").map(Number); const [eh, em] = ev.time_end.split(":").map(Number); let h = (eh + (em||0)/60) - (sh + (sm||0)/60); if (h < 0) h += 24; return h; };
 
 // ─── SHIFT CALCULATOR (24 on, 48 off: A→B→C) ─────────────────────────────────
 // Reference: March 26, 2026 = C shift
@@ -882,6 +883,16 @@ const isPaydayFriday = (dateStr) => {
   return diffDays >= 0 && diffDays % 14 === 0;
 };
 
+// First payday Friday on or after event date — which paycheck the event pays out on
+const getPaydayForDate = (dateStr) => {
+  if (!dateStr) return null;
+  const d = new Date(dateStr + "T00:00:00");
+  const pay = new Date(PAYDAY_REF);
+  while (pay < d) pay.setDate(pay.getDate() + 14);
+  const y = pay.getFullYear(), m = String(pay.getMonth() + 1).padStart(2, "0"), dd = String(pay.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+};
+
 // Kelly Day reference dates (OD1 for each shift in 2026)
 const KELLY_REF = { A: new Date("2026-05-02T00:00:00"), B: new Date("2026-05-03T00:00:00"), C: new Date("2026-05-04T00:00:00") };
 const isKellyDay = (dateStr, kellyNumber, shift) => {
@@ -1356,7 +1367,7 @@ function CoordView({ profile, notify }) {
               <div className="evh">
                 <div>
                   <div className="evn">{ev.name} <StatusBadge status={ev.status} /></div>
-                  <div className="evm">{fmtDate(ev.date)} · {fmtTime(ev.time_start)} – {fmtTime(ev.time_end)} · <span className="sts" style={{background:"rgba(167,139,250,.2)",color:"var(--p)"}}>Shift {getShiftForDate(ev.date)}</span></div>
+                  <div className="evm">{fmtDate(ev.date)} · {fmtTime(ev.time_start)} – {fmtTime(ev.time_end)} · <span className="sts" style={{background:"rgba(167,139,250,.2)",color:"var(--p)"}}>Shift {getShiftForDate(ev.date)}</span> · <span style={{fontSize:11,opacity:.85}}>💰 Pays {fmtDate(getPaydayForDate(ev.date))}</span></div>
                   {(ev.venue || ev.location) && <div className="loc">
                     {ev.venue && <span style={{ fontWeight: 500, color: "var(--t)" }}>{ev.venue}</span>}
                     {ev.venue && ev.location && " · "}
@@ -1846,6 +1857,13 @@ function StaffView({ profile, notify, openHelpChat }) {
     return myAtt.filter(a => a.sign_out_time).reduce((s, a) => s + (parseFloat(calcHours(a.sign_in_time, a.sign_out_time)) || 0), 0);
   }, [myAtt]);
 
+  const myScheduledHours = useMemo(() => {
+    return mySignups.filter(s => s.status === "confirmed").reduce((sum, s) => {
+      const ev = events.find(e => e.id === s.event_id);
+      return sum + eventHours(ev);
+    }, 0);
+  }, [mySignups, events]);
+
   const signUpForEvent = async (eventId) => {
     const ev = events.find(e => e.id === eventId);
     if (ev?.status !== "open") { notify("Event is not open for signups.", "error"); return; }
@@ -1954,7 +1972,7 @@ function StaffView({ profile, notify, openHelpChat }) {
             <div className="evh">
               <div>
                 <div className="evn">{ev.name} <StatusBadge status={ev.status} /> {isMine && <SignupBadge status={myS?.status || "pending"} />} {isMine && myCR.find(c => c.event_id === ev.id && c.status === "pending") && <span className="bg so2">⏳ Withdrawal Pending</span>} {!isMine && recentSlots.includes(ev.id) && <span className="slot-badge">🚨 Open Slot!</span>} {hasConflict && !isMine && <span className="bg so2">⚡ Overlap</span>}</div>
-                <div className="evm">{fmtDate(ev.date)} · {fmtTime(ev.time_start)} – {fmtTime(ev.time_end)} · <span className="sts" style={{background:"rgba(167,139,250,.2)",color:"var(--p)"}}>Shift {getShiftForDate(ev.date)}</span></div>
+                <div className="evm">{fmtDate(ev.date)} · {fmtTime(ev.time_start)} – {fmtTime(ev.time_end)} · <span className="sts" style={{background:"rgba(167,139,250,.2)",color:"var(--p)"}}>Shift {getShiftForDate(ev.date)}</span> · <span style={{fontSize:11,opacity:.85}}>💰 Pays {fmtDate(getPaydayForDate(ev.date))}</span></div>
                 {(ev.venue || ev.location) && <div className="loc">
                   {ev.venue && <span style={{ fontWeight: 500, color: "var(--t)" }}>{ev.venue}</span>}
                   {ev.venue && ev.location && " · "}
@@ -1995,7 +2013,7 @@ function StaffView({ profile, notify, openHelpChat }) {
             <div className="evh">
               <div>
                 <div className="evn">{ev.name} <SignupBadge status={s.status} /></div>
-                <div className="evm">{fmtDate(ev.date)} · {fmtTime(ev.time_start)} – {fmtTime(ev.time_end)} · <span className="sts" style={{background:"rgba(167,139,250,.2)",color:"var(--p)"}}>Shift {getShiftForDate(ev.date)}</span></div>
+                <div className="evm">{fmtDate(ev.date)} · {fmtTime(ev.time_start)} – {fmtTime(ev.time_end)} · <span className="sts" style={{background:"rgba(167,139,250,.2)",color:"var(--p)"}}>Shift {getShiftForDate(ev.date)}</span> · <span style={{fontSize:11,opacity:.85}}>💰 Pays {fmtDate(getPaydayForDate(ev.date))}</span></div>
                 {(ev.venue || ev.location) && <div className="loc">
                   {ev.venue && <span style={{ fontWeight: 500, color: "var(--t)" }}>{ev.venue}</span>}
                   {ev.venue && ev.location && " · "}
@@ -2023,15 +2041,15 @@ function StaffView({ profile, notify, openHelpChat }) {
     {/* ── MY HOURS ── */}
     {tab === "hours" && <>
       <div className="stw">
-        <div className="stc"><div className="sv sg">{myTotalHours.toFixed(1)}</div><div className="svl">Total Hours</div></div>
-        <div className="stc"><div className="sv sa">{myAtt.filter(a => a.sign_out_time).length}</div><div className="svl">Completed</div></div>
+        <div className="stc"><div className="sv sa">{myScheduledHours.toFixed(1)}</div><div className="svl">Scheduled Hrs</div></div>
+        <div className="stc"><div className="sv sg">{myTotalHours.toFixed(1)}</div><div className="svl">Worked Hrs</div></div>
         <div className="stc"><div className="sv sy">{myAtt.filter(a => !a.sign_out_time).length}</div><div className="svl">Active</div></div>
       </div>
       <div className="cd"><table className="lt">
-        <thead><tr><th>Event</th><th>Date</th><th>Clock In</th><th>Clock Out</th><th>Hrs</th></tr></thead>
+        <thead><tr><th>Event</th><th>Date</th><th>Pays</th><th>Clock In</th><th>Clock Out</th><th>Hrs</th></tr></thead>
         <tbody>{myAtt.map(a => {
           const ev = events.find(x => x.id === a.event_id);
-          return (<tr key={a.id}><td>{ev?.name || "?"}</td><td>{fmtDate(ev?.date)}</td><td>{fmtDateTime(a.sign_in_time)}</td><td>{a.sign_out_time ? fmtDateTime(a.sign_out_time) : <span className="bg si">Active</span>}</td><td>{a.sign_out_time ? calcHours(a.sign_in_time, a.sign_out_time) + " hrs" : "—"}</td></tr>);
+          return (<tr key={a.id}><td>{ev?.name || "?"}</td><td>{fmtDate(ev?.date)}</td><td>{fmtDate(getPaydayForDate(ev?.date))}</td><td>{fmtDateTime(a.sign_in_time)}</td><td>{a.sign_out_time ? fmtDateTime(a.sign_out_time) : <span className="bg si">Active</span>}</td><td>{a.sign_out_time ? calcHours(a.sign_in_time, a.sign_out_time) + " hrs" : "—"}</td></tr>);
         })}</tbody>
       </table></div>
     </>}
