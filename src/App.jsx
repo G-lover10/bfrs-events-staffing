@@ -1957,13 +1957,13 @@ function StaffView({ profile, notify }) {
 
     {/* ── MY PROFILE TAB ── */}
     {tab === "profile" && (() => {
-      const [staffProfSaving, setStaffProfSaving] = React.useState(false);
-      const [staffProfMsg, setStaffProfMsg] = React.useState("");
-      const [staffEditProf, setStaffEditProf] = React.useState({
+      const [staffProfSaving, setStaffProfSaving] = useState(false);
+      const [staffProfMsg, setStaffProfMsg] = useState("");
+      const [staffEditProf, setStaffEditProf] = useState({
         name: profile.name||"", email: profile.email||"", phone: profile.phone||"",
         level: profile.level||"", shift: profile.shift||"", kelly_number: profile.kelly_number||""
       });
-      const [showPwModal, setShowPwModal] = React.useState(false);
+      const [showPwModal, setShowPwModal] = useState(false);
       return (<>
         <div className="sct">👤 My Profile</div>
         {/* Current info */}
