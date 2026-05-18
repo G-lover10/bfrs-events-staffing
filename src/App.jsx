@@ -1735,6 +1735,88 @@ function CoordView({ profile, notify }) {
     </>}
   </>);
 }
+function MyProfileTab({ profile, notify, refresh }) {
+  const [staffProfSaving, setStaffProfSaving] = useState(false);
+  const [staffProfMsg, setStaffProfMsg] = useState("");
+  const [staffEditProf, setStaffEditProf] = useState({
+    name: profile.name||"", email: profile.email||"", phone: profile.phone||"",
+    level: profile.level||"", shift: profile.shift||"", kelly_number: profile.kelly_number||""
+  });
+  const [showPwModal, setShowPwModal] = useState(false);
+  return (<>
+    <div className="sct">👤 My Profile</div>
+    {/* Current info */}
+    <div style={{background:"var(--s)",border:"1px solid var(--bd)",borderRadius:10,padding:14,marginBottom:14,fontSize:13}}>
+      <div style={{fontWeight:700,fontSize:15,marginBottom:8}}>{profile.name}</div>
+      <div style={{color:"var(--t2)",lineHeight:1.8}}>
+        <div>📧 {profile.email}</div>
+        <div>📞 {profile.phone||<span style={{color:"var(--o)"}}>No phone set</span>}</div>
+        <div>🚒 {profile.level||<span style={{color:"var(--o)"}}>No level</span>} · Shift {profile.shift||<span style={{color:"var(--o)"}}>?</span>}</div>
+        <div>📅 Kelly Day #: {profile.kelly_number||<span style={{color:"var(--o)"}}>Not set — ask your supervisor</span>}</div>
+      </div>
+    </div>
+    {/* Edit form */}
+    <div style={{background:"var(--s)",border:"1px solid var(--bd)",borderRadius:10,padding:14}}>
+      <div style={{fontSize:11,color:"var(--t2)",marginBottom:12}}>Update your information below.</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+        <div style={{gridColumn:"1/-1"}}>
+          <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:4}}>Full Name</label>
+          <input className="fi" value={staffEditProf.name} onChange={e=>setStaffEditProf(p=>({...p,name:e.target.value}))} style={{fontSize:13}} />
+        </div>
+        <div>
+          <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:4}}>Phone</label>
+          <input className="fi" type="tel" value={staffEditProf.phone} onChange={e=>setStaffEditProf(p=>({...p,phone:e.target.value}))} placeholder="205-555-0100" style={{fontSize:13}} />
+        </div>
+        <div>
+          <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:4}}>Level</label>
+          <select className="fi" value={staffEditProf.level} onChange={e=>setStaffEditProf(p=>({...p,level:e.target.value}))} style={{fontSize:13}}>
+            <option value="">— Select —</option>
+            <option value="Paramedic">Paramedic</option>
+            <option value="EMT Advanced">EMT Advanced</option>
+            <option value="EMT">EMT Basic</option>
+          </select>
+        </div>
+        <div>
+          <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:4}}>Shift</label>
+          <select className="fi" value={staffEditProf.shift} onChange={e=>setStaffEditProf(p=>({...p,shift:e.target.value}))} style={{fontSize:13}}>
+            <option value="">— Select —</option>
+            <option value="A">A Shift</option>
+            <option value="B">B Shift</option>
+            <option value="C">C Shift</option>
+            <option value="Days">Days</option>
+          </select>
+        </div>
+        <div>
+          <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:4}}>Kelly Day # <span style={{opacity:.6}}>(1–9)</span></label>
+          <select className="fi" value={staffEditProf.kelly_number} onChange={e=>setStaffEditProf(p=>({...p,kelly_number:e.target.value}))} style={{fontSize:13}}>
+            <option value="">— Select —</option>
+            {[1,2,3,4,5,6,7,8,9].map(n=><option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+      </div>
+      {staffProfMsg && <div style={{fontSize:12,color:staffProfMsg.includes("✅")?"var(--g)":"var(--r)",marginBottom:8}}>{staffProfMsg}</div>}
+      <button className="bt btg" style={{width:"100%",fontSize:13}} disabled={staffProfSaving} onClick={async()=>{
+        setStaffProfSaving(true); setStaffProfMsg("");
+        const updates = {};
+        if (staffEditProf.name.trim()) updates.name = staffEditProf.name.trim();
+        if (staffEditProf.phone.trim()) updates.phone = staffEditProf.phone.trim();
+        if (staffEditProf.level) updates.level = staffEditProf.level;
+        if (staffEditProf.shift) updates.shift = staffEditProf.shift;
+        if (staffEditProf.kelly_number) updates.kelly_number = parseInt(staffEditProf.kelly_number);
+        const { error } = await supabase.from("profiles").update(updates).eq("id", profile.id);
+        setStaffProfSaving(false);
+        if (error) { setStaffProfMsg("❌ " + error.message); }
+        else { setStaffProfMsg("✅ Profile saved!"); refresh(); }
+      }}>{staffProfSaving ? "Saving..." : "💾 Save Profile"}</button>
+    </div>
+    {/* Change Password */}
+    <div style={{marginTop:12}}>
+      <button className="bt bp" style={{width:"100%",fontSize:13}} onClick={() => setShowPwModal(true)}>🔑 Change Password</button>
+    </div>
+    {showPwModal && <ChangePassword onClose={() => setShowPwModal(false)} notify={notify} />}
+  </>);
+}
+
 function StaffView({ profile, notify }) {
   const { profiles, events, signups, attendance, cancelReqs, activityLog, loading, refresh } = useData();
   const [tab, setTab] = useState("events");
@@ -1960,86 +2042,6 @@ function StaffView({ profile, notify }) {
     </>}
 
     {/* ── MY PROFILE TAB ── */}
-    {tab === "profile" && (() => {
-      const [staffProfSaving, setStaffProfSaving] = useState(false);
-      const [staffProfMsg, setStaffProfMsg] = useState("");
-      const [staffEditProf, setStaffEditProf] = useState({
-        name: profile.name||"", email: profile.email||"", phone: profile.phone||"",
-        level: profile.level||"", shift: profile.shift||"", kelly_number: profile.kelly_number||""
-      });
-      const [showPwModal, setShowPwModal] = useState(false);
-      return (<>
-        <div className="sct">👤 My Profile</div>
-        {/* Current info */}
-        <div style={{background:"var(--s)",border:"1px solid var(--bd)",borderRadius:10,padding:14,marginBottom:14,fontSize:13}}>
-          <div style={{fontWeight:700,fontSize:15,marginBottom:8}}>{profile.name}</div>
-          <div style={{color:"var(--t2)",lineHeight:1.8}}>
-            <div>📧 {profile.email}</div>
-            <div>📞 {profile.phone||<span style={{color:"var(--o)"}}>No phone set</span>}</div>
-            <div>🚒 {profile.level||<span style={{color:"var(--o)"}}>No level</span>} · Shift {profile.shift||<span style={{color:"var(--o)"}}>?</span>}</div>
-            <div>📅 Kelly Day #: {profile.kelly_number||<span style={{color:"var(--o)"}}>Not set — ask your supervisor</span>}</div>
-          </div>
-        </div>
-        {/* Edit form */}
-        <div style={{background:"var(--s)",border:"1px solid var(--bd)",borderRadius:10,padding:14}}>
-          <div style={{fontSize:11,color:"var(--t2)",marginBottom:12}}>Update your information below.</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-            <div style={{gridColumn:"1/-1"}}>
-              <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:4}}>Full Name</label>
-              <input className="fi" value={staffEditProf.name} onChange={e=>setStaffEditProf(p=>({...p,name:e.target.value}))} style={{fontSize:13}} />
-            </div>
-            <div>
-              <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:4}}>Phone</label>
-              <input className="fi" type="tel" value={staffEditProf.phone} onChange={e=>setStaffEditProf(p=>({...p,phone:e.target.value}))} placeholder="205-555-0100" style={{fontSize:13}} />
-            </div>
-            <div>
-              <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:4}}>Level</label>
-              <select className="fi" value={staffEditProf.level} onChange={e=>setStaffEditProf(p=>({...p,level:e.target.value}))} style={{fontSize:13}}>
-                <option value="">— Select —</option>
-                <option value="Paramedic">Paramedic</option>
-                <option value="EMT Advanced">EMT Advanced</option>
-                <option value="EMT">EMT Basic</option>
-              </select>
-            </div>
-            <div>
-              <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:4}}>Shift</label>
-              <select className="fi" value={staffEditProf.shift} onChange={e=>setStaffEditProf(p=>({...p,shift:e.target.value}))} style={{fontSize:13}}>
-                <option value="">— Select —</option>
-                <option value="A">A Shift</option>
-                <option value="B">B Shift</option>
-                <option value="C">C Shift</option>
-                <option value="Days">Days</option>
-              </select>
-            </div>
-            <div>
-              <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:4}}>Kelly Day # <span style={{opacity:.6}}>(1–9)</span></label>
-              <select className="fi" value={staffEditProf.kelly_number} onChange={e=>setStaffEditProf(p=>({...p,kelly_number:e.target.value}))} style={{fontSize:13}}>
-                <option value="">— Select —</option>
-                {[1,2,3,4,5,6,7,8,9].map(n=><option key={n} value={n}>{n}</option>)}
-              </select>
-            </div>
-          </div>
-          {staffProfMsg && <div style={{fontSize:12,color:staffProfMsg.includes("✅")?"var(--g)":"var(--r)",marginBottom:8}}>{staffProfMsg}</div>}
-          <button className="bt btg" style={{width:"100%",fontSize:13}} disabled={staffProfSaving} onClick={async()=>{
-            setStaffProfSaving(true); setStaffProfMsg("");
-            const updates = {};
-            if (staffEditProf.name.trim()) updates.name = staffEditProf.name.trim();
-            if (staffEditProf.phone.trim()) updates.phone = staffEditProf.phone.trim();
-            if (staffEditProf.level) updates.level = staffEditProf.level;
-            if (staffEditProf.shift) updates.shift = staffEditProf.shift;
-            if (staffEditProf.kelly_number) updates.kelly_number = parseInt(staffEditProf.kelly_number);
-            const { error } = await supabase.from("profiles").update(updates).eq("id", profile.id);
-            setStaffProfSaving(false);
-            if (error) { setStaffProfMsg("❌ " + error.message); }
-            else { setStaffProfMsg("✅ Profile saved!"); refresh(); }
-          }}>{staffProfSaving ? "Saving..." : "💾 Save Profile"}</button>
-        </div>
-        {/* Change Password */}
-        <div style={{marginTop:12}}>
-          <button className="bt bp" style={{width:"100%",fontSize:13}} onClick={() => setShowPwModal(true)}>🔑 Change Password</button>
-        </div>
-        {showPwModal && <ChangePassword onClose={() => setShowPwModal(false)} notify={notify} />}
-      </>);
-    })()}
+    {tab === "profile" && <MyProfileTab profile={profile} notify={notify} refresh={refresh} />}
   </>);
 }
