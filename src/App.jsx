@@ -1577,9 +1577,9 @@ function CoordView({ profile, notify }) {
                       <select className="fi" value={addStaffSel} onChange={e=>setAddStaffSel(e.target.value)} style={{flex:"1 1 200px",fontSize:13,minWidth:0}}>
                         <option value="">— Select staff —</option>
                         {profiles
-                          .filter(p => p.role === "staff" && p.approved && !signups.find(s => s.event_id === ev.id && s.staff_id === p.id && s.status !== "cancelled"))
+                          .filter(p => !signups.find(s => s.event_id === ev.id && s.staff_id === p.id && s.status !== "cancelled"))
                           .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
-                          .map(p => <option key={p.id} value={p.id}>{p.name} ({p.level || "—"} · Shift {p.shift || "?"})</option>)
+                          .map(p => <option key={p.id} value={p.id}>{p.name} ({p.level || "—"} · Shift {p.shift || "?"}){!p.approved ? " · ⏳ pending account" : ""}</option>)
                         }
                       </select>
                       <button className="bt btg" disabled={!addStaffSel} onClick={() => manuallyAddStaff(ev.id, addStaffSel)} style={{whiteSpace:"nowrap"}}>Add</button>
