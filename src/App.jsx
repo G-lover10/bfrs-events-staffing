@@ -282,13 +282,16 @@ body{background:var(--bg);color:var(--t);font-family:'DM Sans',sans-serif;min-he
 .rb{font-size:9px;background:var(--s2);padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:1px;font-family:'DM Mono',monospace}.rb.co{background:var(--a);color:var(--bg)}
 .lo{background:none;border:1px solid var(--bd);color:var(--t2);font-size:11px;padding:5px 12px;border-radius:8px;cursor:pointer;font-family:'DM Sans',sans-serif}.lo:hover{border-color:var(--r);color:var(--r)}
 .mn{padding:0}
-.tabs{display:flex;gap:4px;margin-bottom:18px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:18px;padding-bottom:4px}
 .tb{background:var(--s);border:1px solid var(--bd);color:var(--t2);font-size:12px;padding:7px 14px;border-radius:8px;cursor:pointer;white-space:nowrap;font-family:'DM Sans',sans-serif;position:relative}
 .tb:hover{border-color:var(--a)}.tb.on{background:var(--a);color:var(--bg);border-color:var(--a);font-weight:600}
 .nd{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;border-radius:8px;font-size:9px;display:flex;align-items:center;justify-content:center;font-weight:700;padding:0 4px}
 .nd.or{background:var(--o);color:var(--bg)}.nd.rd{background:var(--r);color:#fff}
-.stw{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;margin-bottom:18px}
-.stc{background:var(--s);border:1px solid var(--bd);border-radius:10px;padding:12px;text-align:center}
+.stw{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px}
+.stc{background:var(--s);border:1px solid var(--bd);border-radius:10px;padding:12px;text-align:center;transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease}
+.stc-link{cursor:pointer}
+.stc-link:hover{border-color:var(--a);transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,212,255,.12)}
+.stc-link:active{transform:translateY(0);box-shadow:none}
 .sv{font-size:22px;font-weight:700;font-family:'Bebas Neue',cursive;letter-spacing:1px}
 .svl{font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:1px;margin-top:2px;font-family:'DM Mono',monospace}
 .sa{color:var(--a)}.sg{color:var(--g)}.sy{color:var(--y)}.so{color:var(--o)}.sr2{color:var(--r)}
@@ -1212,12 +1215,12 @@ function CoordView({ profile, notify }) {
     {/* ── DASHBOARD ── */}
     {tab === "dash" && <>
       <div className="stw">
-        <div className="stc"><div className="sv sa">{events.length}</div><div className="svl">Events</div></div>
-        <div className="stc"><div className="sv sg">{profiles.filter(p => p.approved && p.role === "staff").length}</div><div className="svl">Active Staff</div></div>
-        <div className="stc" style={{cursor:"pointer"}} onClick={() => setTab("staff")} title="Click to review"><div className="sv so">{pendingAccounts.length}</div><div className="svl">Pending Accts {pendingAccounts.length > 0 && "→"}</div></div>
-        <div className="stc" style={{cursor:"pointer"}} onClick={() => setTab("events")} title="Click to review"><div className="sv sy">{pendingSignups.length}</div><div className="svl">Pending Signups {pendingSignups.length > 0 && "→"}</div></div>
-        <div className="stc" style={{cursor:"pointer"}} onClick={() => setTab("cr")} title="Click to review"><div className="sv" style={{color:"var(--r)"}}>{pendingCR.length}</div><div className="svl">Withdrawals {pendingCR.length > 0 && "→"}</div></div>
-        <div className="stc"><div className="sv sg">{attendance.filter(a => a.sign_out_time).reduce((s, a) => s + (parseFloat(calcHours(a.sign_in_time, a.sign_out_time)) || 0), 0).toFixed(0)}</div><div className="svl">Total Hrs</div></div>
+        <div className="stc stc-link" onClick={() => setTab("events")} title="View events"><div className="sv sa">{events.length}</div><div className="svl">Events</div></div>
+        <div className="stc stc-link" onClick={() => setTab("staff")} title="View staff"><div className="sv sg">{profiles.filter(p => p.approved && p.role === "staff").length}</div><div className="svl">Active Staff</div></div>
+        <div className="stc stc-link" onClick={() => setTab("staff")} title="Click to review"><div className="sv so">{pendingAccounts.length}</div><div className="svl">Pending Accts {pendingAccounts.length > 0 && "→"}</div></div>
+        <div className="stc stc-link" onClick={() => setTab("events")} title="Click to review"><div className="sv sy">{pendingSignups.length}</div><div className="svl">Pending Signups {pendingSignups.length > 0 && "→"}</div></div>
+        <div className="stc stc-link" onClick={() => setTab("cr")} title="Click to review"><div className="sv" style={{color:"var(--r)"}}>{pendingCR.length}</div><div className="svl">Withdrawals {pendingCR.length > 0 && "→"}</div></div>
+        <div className="stc stc-link" onClick={() => setTab("att")} title="View attendance"><div className="sv sg">{attendance.filter(a => a.sign_out_time).reduce((s, a) => s + (parseFloat(calcHours(a.sign_in_time, a.sign_out_time)) || 0), 0).toFixed(0)}</div><div className="svl">Total Hrs</div></div>
       </div>
 
       {(pendingAccounts.length > 0 || pendingSignups.length > 0 || pendingCR.length > 0) && (
@@ -1840,9 +1843,10 @@ function StaffView({ profile, notify }) {
     {/* ── ALL EVENTS ── */}
     {tab === "events" && <>
       <div className="stw">
-        <div className="stc"><div className="sv sa">{visibleEvents.length}</div><div className="svl">Events</div></div>
-        <div className="stc"><div className="sv so">{mySignups.filter(s=>s.status==="pending").length}</div><div className="svl">Pending</div></div><div className="stc"><div className="sv sg">{mySignups.filter(s=>s.status==="confirmed").length}</div><div className="svl">Approved</div></div>
-        <div className="stc"><div className="sv sy">{myTotalHours.toFixed(1)}</div><div className="svl">My Hours</div></div>
+        <div className="stc stc-link" onClick={() => setTab("events")} title="View all events"><div className="sv sa">{visibleEvents.length}</div><div className="svl">Events</div></div>
+        <div className="stc stc-link" onClick={() => setTab("my")} title="View your events"><div className="sv so">{mySignups.filter(s=>s.status==="pending").length}</div><div className="svl">Pending</div></div>
+        <div className="stc stc-link" onClick={() => setTab("my")} title="View your events"><div className="sv sg">{mySignups.filter(s=>s.status==="confirmed").length}</div><div className="svl">Approved</div></div>
+        <div className="stc stc-link" onClick={() => setTab("hours")} title="View your hours"><div className="sv sy">{myTotalHours.toFixed(1)}</div><div className="svl">My Hours</div></div>
       </div>
       {visibleEvents.map(ev => {
         const es = signups.filter(s => s.event_id === ev.id && s.status === "confirmed");
