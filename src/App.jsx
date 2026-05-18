@@ -277,7 +277,7 @@ body{background:var(--bg);color:var(--t);font-family:'DM Sans',sans-serif;min-he
 .hdr-l{display:flex;align-items:center;gap:10px}
 .brand{font-family:'Bebas Neue',cursive;font-size:22px;letter-spacing:2px;color:var(--a)}.brand span{color:var(--t)}
 .beta{font-size:10px;background:var(--o);color:var(--bg);padding:2px 7px;border-radius:4px;font-weight:700;font-family:'DM Mono',monospace}
-.hdr-r{display:flex;align-items:center;gap:10px}
+.hdr-r{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:10px}
 .pill{font-size:12px;background:var(--s);border:1px solid var(--bd);border-radius:20px;padding:5px 12px;display:flex;align-items:center;gap:7px}
 .rb{font-size:9px;background:var(--s2);padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:1px;font-family:'DM Mono',monospace}.rb.co{background:var(--a);color:var(--bg)}
 .lo{background:none;border:1px solid var(--bd);color:var(--t2);font-size:11px;padding:5px 12px;border-radius:8px;cursor:pointer;font-family:'DM Sans',sans-serif}.lo:hover{border-color:var(--r);color:var(--r)}
@@ -287,7 +287,7 @@ body{background:var(--bg);color:var(--t);font-family:'DM Sans',sans-serif;min-he
 .tb:hover{border-color:var(--a)}.tb.on{background:var(--a);color:var(--bg);border-color:var(--a);font-weight:600}
 .nd{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;border-radius:8px;font-size:9px;display:flex;align-items:center;justify-content:center;font-weight:700;padding:0 4px}
 .nd.or{background:var(--o);color:var(--bg)}.nd.rd{background:var(--r);color:#fff}
-.stw{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px}
+.stw{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;margin-bottom:18px}
 .stc{background:var(--s);border:1px solid var(--bd);border-radius:10px;padding:12px;text-align:center;transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease}
 .stc-link{cursor:pointer}
 .stc-link:hover{border-color:var(--a);transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,212,255,.12)}
@@ -702,7 +702,7 @@ export default function App() {
             <main className="mn">
               {profile.role === "coordinator" && !viewAsStaff
                 ? <CoordView profile={profile} notify={notify} />
-                : <StaffView profile={profile} notify={notify} />}
+                : <StaffView profile={profile} notify={notify} openHelpChat={() => setShowHelpChat(true)} />}
             </main>
           </>
         )}
@@ -1817,7 +1817,7 @@ function MyProfileTab({ profile, notify, refresh }) {
   </>);
 }
 
-function StaffView({ profile, notify }) {
+function StaffView({ profile, notify, openHelpChat }) {
   const { profiles, events, signups, attendance, cancelReqs, activityLog, loading, refresh } = useData();
   const [tab, setTab] = useState("events");
 
@@ -1929,6 +1929,8 @@ function StaffView({ profile, notify }) {
         <div className="stc stc-link" onClick={() => setTab("my")} title="View your events"><div className="sv so">{mySignups.filter(s=>s.status==="pending").length}</div><div className="svl">Pending</div></div>
         <div className="stc stc-link" onClick={() => setTab("my")} title="View your events"><div className="sv sg">{mySignups.filter(s=>s.status==="confirmed").length}</div><div className="svl">Approved</div></div>
         <div className="stc stc-link" onClick={() => setTab("hours")} title="View your hours"><div className="sv sy">{myTotalHours.toFixed(1)}</div><div className="svl">My Hours</div></div>
+        <div className="stc stc-link" onClick={() => setTab("profile")} title="Edit your profile"><div className="sv sa" style={{fontSize:20}}>👤</div><div className="svl">My Profile</div></div>
+        <div className="stc stc-link" onClick={openHelpChat} title="Ask the app assistant"><div className="sv sa" style={{fontSize:20}}>🤖</div><div className="svl">Help</div></div>
       </div>
       {visibleEvents.map(ev => {
         const es = signups.filter(s => s.event_id === ev.id && s.status === "confirmed");
