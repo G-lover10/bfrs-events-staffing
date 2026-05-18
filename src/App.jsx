@@ -992,6 +992,18 @@ function CoordView({ profile, notify }) {
   const [addEv, setAddEv] = useState({ name: "", date: "", time_start: "", time_end: "", location: "", venue: "", notes: "", needed_paramedics: 2, needed_emts: 2 });
   const [selEv, setSelEv] = useState(null);
   const [addStaffSel, setAddStaffSel] = useState("");
+  const [updTimeEv, setUpdTimeEv] = useState(null);
+  const [updTime, setUpdTime] = useState({ start: "", end: "" });
+  const saveTimeUpdate = async (eventId) => {
+    if (!updTime.start || !updTime.end) { notify("Enter both start and end times.", "error"); return; }
+    const { error } = await supabase.from("events").update({ time_start: updTime.start, time_end: updTime.end }).eq("id", eventId);
+    if (error) { notify("Error: " + error.message, "error"); return; }
+    await logActivity("updated_time", "event", eventId, { time_start: updTime.start, time_end: updTime.end });
+    notify("Time updated.");
+    setUpdTimeEv(null);
+    setUpdTime({ start: "", end: "" });
+    refresh();
+  };
   const [editEv, setEditEv] = useState(null);
   const fileRef = useRef(null);
   const [upRes, setUpRes] = useState(null);
@@ -1140,13 +1152,8 @@ function CoordView({ profile, notify }) {
       const c = conflicts[0];
       const msg = `Cannot approve — ${ac?.name} is already confirmed for "${c.name}" (${fmtDate(c.date)} ${fmtTime(c.time_start)}–${fmtTime(c.time_end)}) which overlaps with this event.`;
       notify(msg, "error");
-      sendNotification("overlap_alert", {
-        staffName: ac?.name,
-        eventDate: fmtDate(ev?.date),
-        newEvent: ev?.name,
-        existingEvent: c.name,
-        existingTime: `${fmtTime(c.time_start)}–${fmtTime(c.time_end)}`,
-      });
+      // Email muted May 18 2026 (Eric: emails only for cancel-related events)
+      // sendNotification("overlap_alert", { staffName: ac?.name, eventDate: fmtDate(ev?.date), newEvent: ev?.name, existingEvent: c.name, existingTime: `${fmtTime(c.time_start)}–${fmtTime(c.time_end)}` });
       return;
     }
     await supabase.from("signups").update({ status: "confirmed" }).eq("id", signupId);
@@ -1445,6 +1452,22 @@ function CoordView({ profile, notify }) {
                 </div>
               </div>
               {ev.notes && <div className="nts">📋 {ev.notes}</div>}
+              {(!ev.time_start || ev.time_start === "TBA" || !ev.time_end || ev.time_end === "TBA") && (
+                <div style={{padding:"8px 14px",background:"rgba(255,217,61,.08)",borderTop:"1px solid rgba(255,217,61,.3)",fontSize:12,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                  <span>⏰ Time TBA</span>
+                  {updTimeEv === ev.id ? (
+                    <>
+                      <input type="time" value={updTime.start} onChange={e=>setUpdTime(p=>({...p,start:e.target.value}))} style={{fontSize:12,padding:"2px 4px"}} />
+                      <span>–</span>
+                      <input type="time" value={updTime.end} onChange={e=>setUpdTime(p=>({...p,end:e.target.value}))} style={{fontSize:12,padding:"2px 4px"}} />
+                      <button className="bt bts btg" onClick={()=>saveTimeUpdate(ev.id)}>Save</button>
+                      <button className="bt bts bp" onClick={()=>{setUpdTimeEv(null);setUpdTime({start:"",end:""});}}>Cancel</button>
+                    </>
+                  ) : (
+                    <button className="bt bts bta" onClick={()=>{setUpdTime({start:ev.time_start && ev.time_start !== "TBA" ? ev.time_start.slice(0,5) : "", end:ev.time_end && ev.time_end !== "TBA" ? ev.time_end.slice(0,5) : ""});setUpdTimeEv(ev.id);}}>Update Time</button>
+                  )}
+                </div>
+              )}
               <div className="slb">
                 <div className="sb"><div className="sl"><span>Medics</span><span>{pc}/{ev.needed_paramedics}</span></div><div className="st"><div className={`sf p${pc >= ev.needed_paramedics ? " fu" : ""}`} style={{ width: `${Math.min(100, (pc / (ev.needed_paramedics || 1)) * 100)}%` }} /></div></div>
                 <div className="sb"><div className="sl"><span>EMT</span><span>{ec}/{ev.needed_emts}</span></div><div className="st"><div className={`sf e${ec >= ev.needed_emts ? " fu" : ""}`} style={{ width: `${Math.min(100, (ec / (ev.needed_emts || 1)) * 100)}%` }} /></div></div>
@@ -1896,6 +1919,23 @@ function MyProfileTab({ profile, notify, refresh }) {
         <div>📞 {profile.phone||<span style={{color:"var(--o)"}}>No phone set</span>}</div>
         <div>🚒 {profile.level||<span style={{color:"var(--o)"}}>No level</span>} · Shift {profile.shift||<span style={{color:"var(--o)"}}>?</span>}</div>
         <div>📅 Kelly Day #: {profile.kelly_number||<span style={{color:"var(--o)"}}>Not set — ask your supervisor</span>}</div>
+        {(() => {
+          if (!profile.kelly_number || !profile.shift || profile.shift === "Days") return null;
+          const today = new Date(); today.setHours(0,0,0,0);
+          const next = [];
+          for (let i = 0; i < 365 && next.length < 5; i++) {
+            const d = new Date(today); d.setDate(d.getDate() + i);
+            const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+            if (isKellyDay(iso, profile.kelly_number, profile.shift)) next.push(iso);
+          }
+          if (next.length === 0) return null;
+          return (
+            <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid var(--bd)"}}>
+              <div style={{fontSize:11,color:"var(--t2)",marginBottom:4}}>🟢 Your next Kelly Days (off duty)</div>
+              {next.map(iso => <div key={iso} style={{fontSize:12,paddingLeft:8}}>· {fmtDate(iso)}</div>)}
+            </div>
+          );
+        })()}
         <div>{profile.availability === "unavailable" ? "🚫 Status: Unavailable" : "✅ Status: Available"}</div>
         {profile.avail_note && <div style={{marginTop:6,padding:8,background:"rgba(0,0,0,.2)",borderRadius:6,fontSize:12,whiteSpace:"pre-wrap",color:"var(--t)"}}>📝 {profile.avail_note}</div>}
       </div>
@@ -2070,7 +2110,8 @@ function StaffView({ profile, notify, openHelpChat }) {
     const { error } = await supabase.from("signups").insert({ staff_id: profile.id, event_id: eventId, status: "pending", signed_up_at: nowISO() });
     if (error) { notify(error.message, "error"); return; }
     await logActivity("signed_up", "signup", eventId, { eventName: ev?.name });
-    sendNotification("event_signup", { staffName: profile.name, staffLevel: profile.level, eventName: ev?.name, eventDate: fmtDate(ev?.date) });
+    // Email muted May 18 2026 (Eric: emails only for cancel-related events)
+    // sendNotification("event_signup", { staffName: profile.name, staffLevel: profile.level, eventName: ev?.name, eventDate: fmtDate(ev?.date) });
     if (conflicts.length > 0) {
       notify(`Signup sent! Note: overlaps with ${conflicts.map(c => c.name).join(", ")} — coordinator will decide.`, "warn");
     } else {
