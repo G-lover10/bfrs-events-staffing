@@ -69,7 +69,6 @@ const STATUS_LABELS = { open: "Open", full: "Full", closed: "Closed", cancelled:
 
 // ─── EMAIL NOTIFICATION ──────────────────────────────────────────────────────
 const EMAIL_ENABLED = true;
-const RESEND_API_KEY = import.meta.env.VITE_RESEND_KEY || "";
 const COORDINATOR_EMAILS = ["saleen_190@yahoo.com", "grabcalls@gmail.com"];
 
 const EMAIL_TEMPLATES = {
@@ -108,9 +107,14 @@ const sendNotification = async (type, data) => {
   try {
     const tpl = EMAIL_TEMPLATES[type]?.(data);
     if (!tpl) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return;
     await fetch("/.netlify/functions/send-email", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${session.access_token}`,
+      },
       body: JSON.stringify({ to: COORDINATOR_EMAILS, subject: tpl.subject, html: tpl.html }),
     });
   } catch (e) { /* silent — email is optional */ }
@@ -381,8 +385,6 @@ body{background:var(--bg);color:var(--t);font-family:'DM Sans',sans-serif;min-he
 `;
 
 // ─── FEEDBACK MODAL ───────────────────────────────────────────────────────────
-const GROQ_KEY = import.meta.env.VITE_GROQ_KEY || "";
-
 const AI_REVIEW_PROMPT = (type, message) => `You are reviewing feedback submitted to the BFRS Special Events Staffing app used by Birmingham Fire & Rescue Service. 
 
 Feedback type: ${type}
@@ -476,9 +478,14 @@ function FeedbackModal({ onClose, notify, userId, userName }) {
 
     // AI review in background
     try {
+      const { data: { session: aiSession } } = await supabase.auth.getSession();
+      if (!aiSession?.access_token) { setBusy(false); notify("Please sign in to submit feedback.", "error"); return; }
       const res = await fetch("/.netlify/functions/chatbot", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${aiSession.access_token}`,
+        },
         body: JSON.stringify({ system: "You are an AI that reviews app feedback. Always respond with valid JSON only.", messages: [{ role: "user", content: AI_REVIEW_PROMPT(type, msg.trim()) }] })
       });
       const aiData = await res.json();
@@ -499,7 +506,10 @@ function FeedbackModal({ onClose, notify, userId, userName }) {
       if (review.worthy) {
         await fetch("/.netlify/functions/send-email", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(aiSession?.access_token ? { "Authorization": `Bearer ${aiSession.access_token}` } : {}),
+          },
           body: JSON.stringify({ to: COORDINATOR_EMAILS, subject: `[${review.priority.toUpperCase()}] ${type} Feedback — ${review.summary}`, html: emailHtml })
         });
       }
@@ -548,9 +558,18 @@ function HelpChat({ onClose }) {
     setBusy(true);
     try {
       const history = messages.filter(m => m.role !== "bot" || messages.indexOf(m) > 0).map(m => ({ role: m.role === "user" ? "user" : "assistant", content: m.text }));
+      const { data: { session: helpSession } } = await supabase.auth.getSession();
+      if (!helpSession?.access_token) {
+        setMessages(m => [...m, { role: "bot", text: "🔒 Please sign in to use the help chat." }]);
+        setBusy(false);
+        return;
+      }
       const res = await fetch("/.netlify/functions/chatbot", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${helpSession.access_token}`,
+        },
         body: JSON.stringify({ system: HELP_SYSTEM_PROMPT, messages: [...history, { role: "user", content: q }] })
       });
       const rawText = await res.text();

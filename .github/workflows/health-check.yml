@@ -87,6 +87,7 @@ jobs:
 
           curl -s -X POST "https://bfrs-events-staffing.netlify.app/.netlify/functions/send-email" \
             -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.SYSTEM_TOKEN }}" \
             -d "{
               \"to\": [\"grabcalls@gmail.com\"],
               \"subject\": \"🚨 BFRS App Alert — Action Required\",
