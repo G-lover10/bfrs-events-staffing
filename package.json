@@ -7,7 +7,7 @@
     "dev": "vite",
     "preflight": "node scripts/preflight.cjs",
     "prebuild": "node scripts/preflight.cjs",
-    "build": "vite build",
+    "build": "vite build && node scripts/write-version.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

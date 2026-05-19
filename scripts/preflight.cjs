@@ -12,7 +12,7 @@ try {
 }
 
 const checks = [
-  { name: "Staff: All Events tab", pattern: ">All Events<" },
+  { name: "Staff: All Events / Dashboard tab", pattern: "{/* ── ALL EVENTS ── */}" },
   { name: "Staff: My Events tab", pattern: ">My Events" },
   { name: "Staff: My Hours tab", pattern: ">My Hours<" },
   { name: "Staff: My Profile tab", pattern: ">My Profile<" },

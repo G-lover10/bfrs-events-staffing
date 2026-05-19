@@ -17,11 +17,12 @@ const SIGNUP_STATUS = {pending:{label:"⏳ Pending",cls:"pc"},confirmed:{label:"
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 const nowISO = () => new Date().toISOString();
-const fmtDate = (d) => { if (!d) return "—"; const dt = new Date(d + "T00:00:00"); return dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
+const fmtDate = (d) => { if (!d) return "—"; const dt = new Date(d + "T00:00:00"); return dt.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }); };
 const fmtTime = (t) => { if (!t) return ""; const [h, m] = t.split(":"); const hr = parseInt(h); return `${hr > 12 ? hr - 12 : hr || 12}:${m} ${hr >= 12 ? "PM" : "AM"}`; };
 const fmtDateTime = (iso) => { if (!iso) return "—"; const d = new Date(iso); return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); };
 const fmtFull = (iso) => { if (!iso) return "—"; const d = new Date(iso); return d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" }); };
 const calcHours = (inT, outT) => { if (!inT || !outT) return "0.0"; return ((new Date(outT) - new Date(inT)) / 3600000).toFixed(1); };
+const eventHours = (ev) => { if (!ev || !ev.time_start || !ev.time_end || ev.time_start === "TBA" || ev.time_end === "TBA") return 0; const [sh, sm] = ev.time_start.split(":").map(Number); const [eh, em] = ev.time_end.split(":").map(Number); let h = (eh + (em||0)/60) - (sh + (sm||0)/60); if (h < 0) h += 24; return h; };
 
 // ─── SHIFT CALCULATOR (24 on, 48 off: A→B→C) ─────────────────────────────────
 // Reference: March 26, 2026 = C shift
@@ -277,18 +278,21 @@ body{background:var(--bg);color:var(--t);font-family:'DM Sans',sans-serif;min-he
 .hdr-l{display:flex;align-items:center;gap:10px}
 .brand{font-family:'Bebas Neue',cursive;font-size:22px;letter-spacing:2px;color:var(--a)}.brand span{color:var(--t)}
 .beta{font-size:10px;background:var(--o);color:var(--bg);padding:2px 7px;border-radius:4px;font-weight:700;font-family:'DM Mono',monospace}
-.hdr-r{display:flex;align-items:center;gap:10px}
+.hdr-r{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:10px}
 .pill{font-size:12px;background:var(--s);border:1px solid var(--bd);border-radius:20px;padding:5px 12px;display:flex;align-items:center;gap:7px}
 .rb{font-size:9px;background:var(--s2);padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:1px;font-family:'DM Mono',monospace}.rb.co{background:var(--a);color:var(--bg)}
 .lo{background:none;border:1px solid var(--bd);color:var(--t2);font-size:11px;padding:5px 12px;border-radius:8px;cursor:pointer;font-family:'DM Sans',sans-serif}.lo:hover{border-color:var(--r);color:var(--r)}
 .mn{padding:0}
-.tabs{display:flex;gap:4px;margin-bottom:18px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:18px;padding-bottom:4px}
 .tb{background:var(--s);border:1px solid var(--bd);color:var(--t2);font-size:12px;padding:7px 14px;border-radius:8px;cursor:pointer;white-space:nowrap;font-family:'DM Sans',sans-serif;position:relative}
 .tb:hover{border-color:var(--a)}.tb.on{background:var(--a);color:var(--bg);border-color:var(--a);font-weight:600}
 .nd{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;border-radius:8px;font-size:9px;display:flex;align-items:center;justify-content:center;font-weight:700;padding:0 4px}
 .nd.or{background:var(--o);color:var(--bg)}.nd.rd{background:var(--r);color:#fff}
 .stw{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;margin-bottom:18px}
-.stc{background:var(--s);border:1px solid var(--bd);border-radius:10px;padding:12px;text-align:center}
+.stc{background:var(--s);border:1px solid var(--bd);border-radius:10px;padding:12px;text-align:center;transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease}
+.stc-link{cursor:pointer}
+.stc-link:hover{border-color:var(--a);transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,212,255,.12)}
+.stc-link:active{transform:translateY(0);box-shadow:none}
 .sv{font-size:22px;font-weight:700;font-family:'Bebas Neue',cursive;letter-spacing:1px}
 .svl{font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:1px;margin-top:2px;font-family:'DM Mono',monospace}
 .sa{color:var(--a)}.sg{color:var(--g)}.sy{color:var(--y)}.so{color:var(--o)}.sr2{color:var(--r)}
@@ -360,7 +364,7 @@ body{background:var(--bg);color:var(--t);font-family:'DM Sans',sans-serif;min-he
 .promo-btn{background:none;border:1px solid var(--a);color:var(--a);padding:3px 8px;border-radius:4px;font-size:10px;cursor:pointer;font-family:'DM Mono',monospace}.promo-btn:hover{background:var(--a);color:var(--bg)}
 .demote-btn{background:none;border:1px solid var(--r);color:var(--r);padding:3px 8px;border-radius:4px;font-size:10px;cursor:pointer;font-family:'DM Mono',monospace}.demote-btn:hover{background:var(--r);color:#fff}
 .bulk-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
-.fab-group{position:fixed;bottom:20px;left:16px;display:flex;flex-direction:column;align-items:center;gap:8px;z-index:800}.fab-label{font-size:9px;color:var(--t2);text-transform:uppercase;letter-spacing:1px;font-family:'DM Mono',monospace;text-align:center}.fb-fab{width:44px;height:44px;border-radius:22px;background:var(--a);color:var(--bg);border:none;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.3);transition:transform .2s}.fb-fab:hover{transform:scale(1.1)}.help-fab{width:44px;height:44px;border-radius:22px;background:var(--g);color:var(--bg);border:none;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.3);transition:transform .2s}.help-fab:hover{transform:scale(1.1)}
+.fab-group{position:fixed;bottom:20px;left:16px;display:flex;flex-direction:column;align-items:center;gap:8px;z-index:800}.fab-label{font-size:9px;color:var(--t2);text-transform:uppercase;letter-spacing:1px;font-family:'DM Mono',monospace;text-align:center}.fb-fab{width:44px;height:44px;border-radius:22px;background:var(--a);color:var(--bg);border:none;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.3);transition:transform .2s}.fb-fab:hover{transform:scale(1.1)}.help-fab{width:44px;height:44px;border-radius:22px;background:var(--g);color:var(--bg);border:none;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.3);transition:transform .2s}.help-fab:hover{transform:scale(1.1)}.fab-close{align-self:flex-end;width:20px;height:20px;border-radius:10px;background:var(--bg);border:1px solid var(--bd);color:var(--t2);font-size:12px;line-height:1;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;font-family:sans-serif}.fab-close:hover{color:var(--r);border-color:var(--r)}.fab-show{position:fixed;bottom:24px;left:0;width:22px;height:46px;border-radius:0 12px 12px 0;background:var(--g);color:var(--bg);border:none;font-size:16px;cursor:pointer;z-index:800;box-shadow:2px 2px 8px rgba(0,0,0,.3);opacity:.6;padding:0;font-family:sans-serif}.fab-show:hover{opacity:1}
 .fb-type{display:flex;gap:6px;margin-bottom:14px}.fb-type button{flex:1;padding:8px;border-radius:8px;border:1px solid var(--bd);background:var(--s2);color:var(--t2);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif}.fb-type button.act{border-color:var(--a);color:var(--a);background:rgba(0,212,255,.1)}
 .fb-item{background:var(--s);border:1px solid var(--bd);border-radius:10px;padding:12px;margin-bottom:8px}
 .slot-badge{background:rgba(239,68,68,.15);color:var(--r);border:1px solid var(--r);border-radius:6px;padding:2px 8px;font-size:10px;font-family:'DM Mono',monospace;animation:pulse 1.5s infinite}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
@@ -549,11 +553,24 @@ function HelpChat({ onClose }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ system: HELP_SYSTEM_PROMPT, messages: [...history, { role: "user", content: q }] })
       });
-      const data = await res.json();
+      const rawText = await res.text();
+      let data;
+      try { data = JSON.parse(rawText); }
+      catch {
+        setMessages(m => [...m, { role: "bot", text: `🐛 HTTP ${res.status} — server returned non-JSON: ${rawText.slice(0, 300)}` }]);
+        setBusy(false);
+        return;
+      }
+      if (!res.ok || data?.error) {
+        const errMsg = data?.error?.message || (typeof data?.error === "string" ? data.error : `HTTP ${res.status}`);
+        setMessages(m => [...m, { role: "bot", text: `🐛 Upstream error: ${errMsg}` }]);
+        setBusy(false);
+        return;
+      }
       const answer = data.choices?.[0]?.message?.content || "Sorry, I couldn't get a response. Try again.";
       setMessages(m => [...m, { role: "bot", text: answer }]);
     } catch(e) {
-      setMessages(m => [...m, { role: "bot", text: "Connection error. Please try again." }]);
+      setMessages(m => [...m, { role: "bot", text: `🐛 Fetch failed: ${e.message || e}` }]);
     }
     setBusy(false);
   };
@@ -622,7 +639,24 @@ export default function App() {
   const [showPwModal, setShowPwModal] = useState(false);
   const [showFbModal, setShowFbModal] = useState(false);
   const [showHelpChat, setShowHelpChat] = useState(false);
+  const [fabHidden, setFabHidden] = useState(false);
   const [viewAsStaff, setViewAsStaff] = useState(false);
+  const [newVersionAvailable, setNewVersionAvailable] = useState(false);
+  const initialBuildRef = useRef(null);
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const res = await fetch("/version.json?t=" + Date.now(), { cache: "no-cache" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (initialBuildRef.current === null) { initialBuildRef.current = data.build; return; }
+        if (data.build && data.build > initialBuildRef.current) setNewVersionAvailable(true);
+      } catch { /* silent — offline or 404 in dev */ }
+    };
+    check();
+    const id = setInterval(check, 60000);
+    return () => clearInterval(id);
+  }, []);
   const [theme, setTheme] = useState(() => {
     try { return localStorage.getItem("bfrs-theme") || "dark"; } catch { return "dark"; }
   });
@@ -648,7 +682,26 @@ export default function App() {
 
   const loadProfile = async (uid) => {
     const { data } = await supabase.from("profiles").select("*").eq("id", uid).single();
-    setProfile(data); setLoading(false);
+    if (data) { setProfile(data); setLoading(false); return; }
+    // Auto-repair: profile row missing (registration upsert likely failed under
+    // RLS before session was established). Rebuild from auth user metadata.
+    const { data: authData } = await supabase.auth.getUser();
+    const meta = authData?.user?.user_metadata || {};
+    const repaired = {
+      id: uid,
+      email: authData?.user?.email || "",
+      name: meta.name || "",
+      level: meta.level || "",
+      shift: meta.shift || "",
+      phone: meta.phone || "",
+      kelly_number: meta.kelly_number || null,
+      role: meta.role || "staff",
+      approved: false,
+    };
+    const { data: upserted, error: upErr } = await supabase.from("profiles").upsert(repaired, { onConflict: "id" }).select().single();
+    if (upErr) { console.error("Profile auto-repair failed:", upErr); setProfile(null); }
+    else { setProfile(upserted); }
+    setLoading(false);
   };
 
   const handleLogout = async () => { await supabase.auth.signOut(); setSession(null); setProfile(null); };
@@ -677,20 +730,31 @@ export default function App() {
             {showPwModal && <ChangePassword onClose={() => setShowPwModal(false)} notify={notify} />}
             {showFbModal && <FeedbackModal onClose={() => setShowFbModal(false)} notify={notify} userId={profile.id} userName={profile.name} />}
             {showHelpChat && <HelpChat onClose={() => setShowHelpChat(false)} />}
-            <div className="fab-group">
-              <div className="fab-label">Help</div>
-              <button className="help-fab" onClick={() => { setShowHelpChat(h => !h); setShowFbModal(false); }} title="App Help">🤖</button>
-              <button className="fb-fab" onClick={() => { setShowFbModal(true); setShowHelpChat(false); }} title="Send Feedback">💬</button>
-              <div className="fab-label">Feedback</div>
-            </div>
+            {!fabHidden && (
+              <div className="fab-group">
+                <button className="fab-close" onClick={() => setFabHidden(true)} title="Hide help/feedback buttons">×</button>
+                <div className="fab-label">Help</div>
+                <button className="help-fab" onClick={() => { setShowHelpChat(h => !h); setShowFbModal(false); }} title="App Help">🤖</button>
+                <button className="fb-fab" onClick={() => { setShowFbModal(true); setShowHelpChat(false); }} title="Send Feedback">💬</button>
+                <div className="fab-label">Feedback</div>
+              </div>
+            )}
+            {fabHidden && (
+              <button className="fab-show" onClick={() => setFabHidden(false)} title="Show help/feedback buttons">›</button>
+            )}
             <main className="mn">
               {profile.role === "coordinator" && !viewAsStaff
                 ? <CoordView profile={profile} notify={notify} />
-                : <StaffView profile={profile} notify={notify} />}
+                : <StaffView profile={profile} notify={notify} openHelpChat={() => setShowHelpChat(true)} />}
             </main>
           </>
         )}
         {notif && <div className={`nf ${notif.t === "error" ? "er" : notif.t === "warn" ? "wr" : "ok"}`}>{notif.msg}</div>}
+        {newVersionAvailable && (
+          <div onClick={() => window.location.reload()} role="button" style={{position:"fixed",top:0,left:0,right:0,padding:"10px 14px",background:"var(--a)",color:"var(--bg)",fontSize:13,fontWeight:600,textAlign:"center",cursor:"pointer",zIndex:9999,boxShadow:"0 2px 8px rgba(0,0,0,.3)"}}>
+            🔄 New version available — tap to refresh
+          </div>
+        )}
       </div>
     </>
   );
@@ -750,8 +814,8 @@ function Auth({ onLogin, notify, theme, toggleTheme }) {
       }, { onConflict: "id" });
     }
     setBusy(false);
-    // Fire notification to coordinators
-    sendNotification("new_registration", { name, email: email.trim(), level, shift, phone });
+    // Per Notion email-status policy (May 16 2026), new_registration emails are OFF.
+    // sendNotification("new_registration", { name, email: email.trim(), level, shift, phone });
     notify("Registration submitted — awaiting coordinator approval.");
   };
 
@@ -803,14 +867,29 @@ function useData() {
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
+    // Pagination helper — bypasses Supabase's PostgREST db-max-rows cap (default 1000)
+    // by looping range() requests. Returns { data: full, error } in the same shape as a
+    // single supabase call, so the rest of refresh() doesn't need to change.
+    const fetchAll = async (builder) => {
+      let all = [];
+      const page = 1000;
+      for (let from = 0; from < 100000; from += page) {
+        const { data, error } = await builder().range(from, from + page - 1);
+        if (error) return { data: null, error };
+        if (!data || data.length === 0) break;
+        all = all.concat(data);
+        if (data.length < page) break;
+      }
+      return { data: all, error: null };
+    };
     const [pR, eR, sR, aR, cR, lR, fR] = await Promise.all([
-      supabase.from("profiles").select("*").order("name"),
-      supabase.from("events").select("*").order("date"),
-      supabase.from("signups").select("*"),
-      supabase.from("attendance").select("*"),
-      supabase.from("cancel_requests").select("*").order("requested_at", { ascending: false }),
+      fetchAll(() => supabase.from("profiles").select("*").order("name")),
+      fetchAll(() => supabase.from("events").select("*").order("date")),
+      fetchAll(() => supabase.from("signups").select("*")),
+      fetchAll(() => supabase.from("attendance").select("*")),
+      fetchAll(() => supabase.from("cancel_requests").select("*").order("requested_at", { ascending: false })),
       supabase.from("activity_log").select("*").order("created_at", { ascending: false }).limit(200),
-      supabase.from("feedback").select("*").order("created_at", { ascending: false }),
+      fetchAll(() => supabase.from("feedback").select("*").order("created_at", { ascending: false })),
     ]);
     if (pR.data) setProfiles(pR.data);
     if (eR.data) setEvents(eR.data);
@@ -837,6 +916,20 @@ function useData() {
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [refresh]);
 
+  // Realtime: subscribe to every table change so all open clients see updates instantly
+  useEffect(() => {
+    const channel = supabase.channel("app-data-sync")
+      .on("postgres_changes", { event: "*", schema: "public", table: "signups" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "events" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "attendance" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "cancel_requests" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "activity_log" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "feedback" }, refresh)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [refresh]);
+
   return { profiles, events, signups, attendance, cancelReqs, activityLog, feedback, loading, refresh };
 }
 
@@ -849,14 +942,47 @@ function SignupBadge({status}){const s=SIGNUP_STATUS[status]||SIGNUP_STATUS.pend
 // ─── SMART SIGNUP SCORER ─────────────────────────────────────────────────────
 // Scores each pending signup to recommend best approvals for an event.
 // Criteria: credential match, not on duty, fewer events this month, sign-up order.
-// Payday Fridays every 14 days from May 1, 2026
-const PAYDAY_REF = new Date("2026-05-01T00:00:00");
+// First real payday Friday — May 15, 2026. May 1 was period END (paid May 15), NOT a payday.
+// Per Notion design spec "Pay Period Hours View": Apr 18–May 1 → paid May 15, then biweekly.
+const PAYDAY_REF = new Date("2026-05-15T00:00:00");
+const PERIOD_END_REF = new Date("2026-05-01T00:00:00");
 const isPaydayFriday = (dateStr) => {
   if (!dateStr) return false;
   const d = new Date(dateStr + "T00:00:00");
   if (d.getDay() !== 5) return false; // Must be Friday
   const diffDays = Math.round((d - PAYDAY_REF) / (1000 * 60 * 60 * 24));
   return diffDays >= 0 && diffDays % 14 === 0;
+};
+
+// Which paycheck an event pays out on: payday = end-of-period + 14 days.
+// Anchors on PERIOD_END_REF (May 1) so May 2 → May 29 check, not May 15.
+const getPaydayForDate = (dateStr) => {
+  if (!dateStr) return null;
+  const d = new Date(dateStr + "T00:00:00");
+  const periodEnd = new Date(PERIOD_END_REF);
+  while (periodEnd < d) periodEnd.setDate(periodEnd.getDate() + 14);
+  const payday = new Date(periodEnd);
+  payday.setDate(payday.getDate() + 14);
+  const y = payday.getFullYear(), m = String(payday.getMonth() + 1).padStart(2, "0"), dd = String(payday.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+};
+
+// Returns { start, end, payday, checkLabel, rangeLabel } for the pay period containing dateStr.
+const getPayPeriodForDate = (dateStr) => {
+  if (!dateStr) return null;
+  const d = new Date(dateStr + "T00:00:00");
+  const periodEnd = new Date(PERIOD_END_REF);
+  while (periodEnd < d) periodEnd.setDate(periodEnd.getDate() + 14);
+  const payday = new Date(periodEnd);
+  payday.setDate(payday.getDate() + 14);
+  const periodStart = new Date(periodEnd);
+  periodStart.setDate(periodStart.getDate() - 13);
+  const iso = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+  const sm = periodStart.toLocaleDateString("en-US", { month: "short" });
+  const em = periodEnd.toLocaleDateString("en-US", { month: "short" });
+  const rangeLabel = (sm === em) ? `${sm} ${periodStart.getDate()}–${periodEnd.getDate()}` : `${sm} ${periodStart.getDate()}–${em} ${periodEnd.getDate()}`;
+  const checkLabel = `${payday.toLocaleDateString("en-US", { month: "short" })} ${payday.getDate()} Check`;
+  return { start: iso(periodStart), end: iso(periodEnd), payday: iso(payday), checkLabel, rangeLabel };
 };
 
 // Kelly Day reference dates (OD1 for each shift in 2026)
@@ -934,6 +1060,19 @@ function CoordView({ profile, notify }) {
   const [tab, setTab] = useState("dash");
   const [addEv, setAddEv] = useState({ name: "", date: "", time_start: "", time_end: "", location: "", venue: "", notes: "", needed_paramedics: 2, needed_emts: 2 });
   const [selEv, setSelEv] = useState(null);
+  const [addStaffSel, setAddStaffSel] = useState("");
+  const [updTimeEv, setUpdTimeEv] = useState(null);
+  const [updTime, setUpdTime] = useState({ start: "", end: "" });
+  const saveTimeUpdate = async (eventId) => {
+    if (!updTime.start || !updTime.end) { notify("Enter both start and end times.", "error"); return; }
+    const { error } = await supabase.from("events").update({ time_start: updTime.start, time_end: updTime.end }).eq("id", eventId);
+    if (error) { notify("Error: " + error.message, "error"); return; }
+    await logActivity("updated_time", "event", eventId, { time_start: updTime.start, time_end: updTime.end });
+    notify("Time updated.");
+    setUpdTimeEv(null);
+    setUpdTime({ start: "", end: "" });
+    refresh();
+  };
   const [editEv, setEditEv] = useState(null);
   const fileRef = useRef(null);
   const [upRes, setUpRes] = useState(null);
@@ -952,7 +1091,8 @@ function CoordView({ profile, notify }) {
     const { error } = await supabase.from("profiles").update({ approved: true }).eq("id", id);
     if (error) { notify(error.message, "error"); return; }
     await logActivity("approved_account", "profile", id, { name: acc?.name });
-    sendNotification("account_approved", { name: acc?.name, email: acc?.email });
+    // Per Notion email-status policy (May 16 2026), account_approved emails are OFF.
+    // sendNotification("account_approved", { name: acc?.name, email: acc?.email });
     notify("Account approved."); refresh();
   };
   const approveAll = async () => {
@@ -962,14 +1102,16 @@ function CoordView({ profile, notify }) {
     if (error) { notify(error.message, "error"); return; }
     for (const acc of pendingAccounts) {
       await logActivity("approved_account", "profile", acc.id, { name: acc.name });
-      sendNotification("account_approved", { name: acc.name, email: acc.email });
+      // Per Notion email-status policy (May 16 2026), account_approved emails are OFF.
+      // sendNotification("account_approved", { name: acc.name, email: acc.email });
     }
     notify(`${pendingAccounts.length} accounts approved.`); refresh();
   };
   const denyAccount = async (id) => {
     const acc = profiles.find(p => p.id === id);
+    const { error } = await supabase.from("profiles").delete().eq("id", id);
+    if (error) { notify(`Failed to deny ${acc?.name}: ${error.message}. Try again.`, "error"); return; }
     await logActivity("denied_account", "profile", id, { name: acc?.name });
-    await supabase.from("profiles").delete().eq("id", id);
     notify("Account denied.", "error"); refresh();
   };
   const promoteToCoordinator = async (id) => {
@@ -1005,14 +1147,16 @@ function CoordView({ profile, notify }) {
 
   const deleteEvent = async (id) => {
     const ev = events.find(e => e.id === id);
+    const { error } = await supabase.from("events").delete().eq("id", id);
+    if (error) { notify(`Failed to delete event: ${error.message}. Try again.`, "error"); return; }
     await logActivity("deleted_event", "event", id, { name: ev?.name });
-    await supabase.from("events").delete().eq("id", id);
     notify("Event deleted."); refresh();
   };
 
   const updateEventStatus = async (id, status) => {
     const ev = events.find(e => e.id === id);
-    await supabase.from("events").update({ status }).eq("id", id);
+    const { error } = await supabase.from("events").update({ status }).eq("id", id);
+    if (error) { notify(`Failed to update status: ${error.message}. Try again.`, "error"); return; }
     await logActivity("changed_event_status", "event", id, { name: ev?.name, status });
     notify(`Event marked as ${status}.`); refresh();
   };
@@ -1046,10 +1190,32 @@ function CoordView({ profile, notify }) {
     notify("Clocked out!"); refresh();
   };
   const coordRemoveSignup = async (staffId, eventId) => {
-    await supabase.from("signups").delete().match({ staff_id: staffId, event_id: eventId });
     const ac = profiles.find(p => p.id === staffId);
+    const { error } = await supabase.from("signups").delete().match({ staff_id: staffId, event_id: eventId });
+    if (error) { notify(`Failed to remove ${ac?.name}: ${error.message}. Try again.`, "error"); return; }
     await logActivity("removed_signup", "signup", eventId, { staffName: ac?.name });
     notify("Signup removed."); refresh();
+  };
+  const manuallyAddStaff = async (eventId, staffId) => {
+    if (!staffId) return;
+    const ev = events.find(e => e.id === eventId);
+    const ac = profiles.find(p => p.id === staffId);
+    if (!ac) { notify("Staff not found.", "error"); return; }
+    if (signups.find(s => s.event_id === eventId && s.staff_id === staffId && s.status !== "cancelled")) {
+      notify(`${ac.name} is already signed up for this event.`, "warn");
+      return;
+    }
+    const conflicts = findConflicts(eventId, staffId, events, signups);
+    if (conflicts.length > 0) {
+      const c = conflicts[0];
+      if (!confirm(`${ac.name} is already confirmed for "${c.name}" (${fmtDate(c.date)} ${fmtTime(c.time_start)}–${fmtTime(c.time_end)}) which overlaps with this event.\n\nAdd anyway?`)) return;
+    }
+    const { error } = await supabase.from("signups").insert({ staff_id: staffId, event_id: eventId, status: "confirmed", signed_up_at: nowISO() });
+    if (error) { notify("Add error: " + error.message, "error"); return; }
+    await logActivity("manually_added", "signup", eventId, { staffName: ac.name, eventName: ev?.name });
+    notify(`${ac.name} added to ${ev?.name}.`);
+    setAddStaffSel("");
+    refresh();
   };
   const approveSignup = async (signupId) => {
     const su = signups.find(s => s.id === signupId);
@@ -1061,24 +1227,21 @@ function CoordView({ profile, notify }) {
       const c = conflicts[0];
       const msg = `Cannot approve — ${ac?.name} is already confirmed for "${c.name}" (${fmtDate(c.date)} ${fmtTime(c.time_start)}–${fmtTime(c.time_end)}) which overlaps with this event.`;
       notify(msg, "error");
-      sendNotification("overlap_alert", {
-        staffName: ac?.name,
-        eventDate: fmtDate(ev?.date),
-        newEvent: ev?.name,
-        existingEvent: c.name,
-        existingTime: `${fmtTime(c.time_start)}–${fmtTime(c.time_end)}`,
-      });
+      // Email muted May 18 2026 (Eric: emails only for cancel-related events)
+      // sendNotification("overlap_alert", { staffName: ac?.name, eventDate: fmtDate(ev?.date), newEvent: ev?.name, existingEvent: c.name, existingTime: `${fmtTime(c.time_start)}–${fmtTime(c.time_end)}` });
       return;
     }
-    await supabase.from("signups").update({ status: "confirmed" }).eq("id", signupId);
+    const { error: apErr } = await supabase.from("signups").update({ status: "confirmed" }).eq("id", signupId);
+    if (apErr) { notify(`Approval failed for ${ac?.name}: ${apErr.message}. Try again.`, "error"); return; }
     await logActivity("approved_signup", "signup", signupId, { staffName: ac?.name, eventName: ev?.name });
     notify(`${ac?.name} approved for ${ev?.name}.`); refresh();
   };
   const denySignup = async (signupId) => {
     const su = signups.find(s => s.id === signupId);
-    await supabase.from("signups").update({ status: "denied" }).eq("id", signupId);
     const ac = profiles.find(p => p.id === su?.staff_id);
     const ev = events.find(e => e.id === su?.event_id);
+    const { error: dnErr } = await supabase.from("signups").update({ status: "denied" }).eq("id", signupId);
+    if (dnErr) { notify(`Deny failed for ${ac?.name}: ${dnErr.message}. Try again.`, "error"); return; }
     await logActivity("denied_signup", "signup", signupId, { staffName: ac?.name, eventName: ev?.name });
     notify(`${ac?.name} denied for ${ev?.name}.`); refresh();
   };
@@ -1088,12 +1251,15 @@ function CoordView({ profile, notify }) {
   const approveCR = async (crId) => {
     const cr = cancelReqs.find(c => c.id === crId);
     if (!cr) return;
-    await supabase.from("cancel_requests").update({ status: "approved" }).eq("id", crId);
-    await supabase.from("signups").delete().match({ staff_id: cr.staff_id, event_id: cr.event_id });
     const ac = profiles.find(p => p.id === cr.staff_id);
     const ev = events.find(e => e.id === cr.event_id);
+    const { error: crErr } = await supabase.from("cancel_requests").update({ status: "approved" }).eq("id", crId);
+    if (crErr) { notify(`Cancel approval failed: ${crErr.message}. Try again.`, "error"); return; }
+    const { error: delErr } = await supabase.from("signups").delete().match({ staff_id: cr.staff_id, event_id: cr.event_id });
+    if (delErr) { notify(`Cancel marked approved but staff signup not removed: ${delErr.message}. Manually remove from event.`, "error"); refresh(); return; }
     await logActivity("approved_cancel", "cancel_request", crId, { staffName: ac?.name, eventName: ev?.name });
-    sendNotification("cancel_decision", { staffEmail: ac?.email, staffName: ac?.name, eventName: ev?.name, decision: "approved" });
+    // Email muted May 18 2026 (Eric: no request or approval emails)
+    // sendNotification("cancel_decision", { staffEmail: ac?.email, staffName: ac?.name, eventName: ev?.name, decision: "approved" });
     // Log open slot so staff see in-app alert
     await logActivity("slot_opened", "event", ev?.id, { eventName: ev?.name, eventDate: ev?.date, timeStart: ev?.time_start, timeEnd: ev?.time_end });
     // Blast — prioritize staff already signed up (pending/denied) then all other eligible staff
@@ -1115,11 +1281,13 @@ function CoordView({ profile, notify }) {
   };
   const denyCR = async (crId) => {
     const cr = cancelReqs.find(c => c.id === crId);
-    await supabase.from("cancel_requests").update({ status: "denied" }).eq("id", crId);
     const ac = profiles.find(p => p.id === cr?.staff_id);
     const ev = events.find(e => e.id === cr?.event_id);
+    const { error: dnCRErr } = await supabase.from("cancel_requests").update({ status: "denied" }).eq("id", crId);
+    if (dnCRErr) { notify(`Cancel denial failed: ${dnCRErr.message}. Try again.`, "error"); return; }
     await logActivity("denied_cancel", "cancel_request", crId, { staffName: ac?.name, eventName: ev?.name });
-    sendNotification("cancel_decision", { staffEmail: ac?.email, staffName: ac?.name, eventName: ev?.name, decision: "denied" });
+    // Email muted May 18 2026 (Eric: no request or approval emails)
+    // sendNotification("cancel_decision", { staffEmail: ac?.email, staffName: ac?.name, eventName: ev?.name, decision: "denied" });
     notify("Cancel denied."); refresh();
   };
 
@@ -1139,13 +1307,28 @@ function CoordView({ profile, notify }) {
   };
   const confirmImport = async () => {
     if (!previewEvs || previewEvs.events.length === 0) return;
-    const toInsert = previewEvs.events.map(ev => ({ ...ev, created_by: profile.id }));
+    const existingKeys = new Set(events.map(e => `${(e.name||"").trim().toLowerCase()}|${e.date}`));
+    const toInsert = [];
+    const skipped = [];
+    for (const ev of previewEvs.events) {
+      const key = `${(ev.name||"").trim().toLowerCase()}|${ev.date}`;
+      if (existingKeys.has(key)) { skipped.push(ev); continue; }
+      existingKeys.add(key);
+      toInsert.push({ ...ev, created_by: profile.id });
+    }
+    if (toInsert.length === 0) {
+      notify(`No new events — all ${skipped.length} already exist in the system.`, "warn");
+      setUpRes({ count: 0, errors: previewEvs.errors, skipped: skipped.length });
+      setPreviewEvs(null);
+      return;
+    }
     const { error } = await supabase.from("events").insert(toInsert);
     if (error) { notify("Import error: " + error.message, "error"); return; }
-    await logActivity("imported_events", "event", "bulk", { count: previewEvs.events.length });
-    setUpRes({ count: previewEvs.events.length, errors: previewEvs.errors });
+    await logActivity("imported_events", "event", "bulk", { count: toInsert.length, skipped: skipped.length });
+    setUpRes({ count: toInsert.length, errors: previewEvs.errors, skipped: skipped.length });
     setPreviewEvs(null);
-    notify(`${toInsert.length} events imported!`); refresh();
+    notify(`${toInsert.length} events imported!${skipped.length ? ` (${skipped.length} already existed and were skipped.)` : ""}`);
+    refresh();
   };
 
   // ── Dashboard data ──
@@ -1192,6 +1375,7 @@ function CoordView({ profile, notify }) {
       <button className={`tb${tab === "att" ? " on" : ""}`} onClick={() => setTab("att")}>Attendance</button>
       <button className={`tb${tab === "cr" ? " on" : ""}`} onClick={() => setTab("cr")}>Cancel Reqs{pendingCR.length > 0 && <span className="nd or">{pendingCR.length}</span>}</button>
       <button className={`tb${tab === "log" ? " on" : ""}`} onClick={() => setTab("log")}>Activity Log</button>
+      <button className={`tb${tab === "health" ? " on" : ""}`} onClick={() => setTab("health")}>Health</button>
       <button className={`tb${tab === "import" ? " on" : ""}`} onClick={() => setTab("import")}>Import</button>
       <button className={`tb${tab === "fb" ? " on" : ""}`} onClick={() => setTab("fb")}>Feedback{feedback.filter(f => f.status === "new").length > 0 && <span className="nd or">{feedback.filter(f => f.status === "new").length}</span>}</button>
     </div>
@@ -1199,12 +1383,12 @@ function CoordView({ profile, notify }) {
     {/* ── DASHBOARD ── */}
     {tab === "dash" && <>
       <div className="stw">
-        <div className="stc"><div className="sv sa">{events.length}</div><div className="svl">Events</div></div>
-        <div className="stc"><div className="sv sg">{profiles.filter(p => p.approved && p.role === "staff").length}</div><div className="svl">Active Staff</div></div>
-        <div className="stc" style={{cursor:"pointer"}} onClick={() => setTab("staff")} title="Click to review"><div className="sv so">{pendingAccounts.length}</div><div className="svl">Pending Accts {pendingAccounts.length > 0 && "→"}</div></div>
-        <div className="stc" style={{cursor:"pointer"}} onClick={() => setTab("events")} title="Click to review"><div className="sv sy">{pendingSignups.length}</div><div className="svl">Pending Signups {pendingSignups.length > 0 && "→"}</div></div>
-        <div className="stc" style={{cursor:"pointer"}} onClick={() => setTab("cr")} title="Click to review"><div className="sv" style={{color:"var(--r)"}}>{pendingCR.length}</div><div className="svl">Withdrawals {pendingCR.length > 0 && "→"}</div></div>
-        <div className="stc"><div className="sv sg">{attendance.filter(a => a.sign_out_time).reduce((s, a) => s + (parseFloat(calcHours(a.sign_in_time, a.sign_out_time)) || 0), 0).toFixed(0)}</div><div className="svl">Total Hrs</div></div>
+        <div className="stc stc-link" onClick={() => setTab("events")} title="View events"><div className="sv sa">{events.length}</div><div className="svl">Events</div></div>
+        <div className="stc stc-link" onClick={() => setTab("staff")} title="View staff"><div className="sv sg">{profiles.filter(p => p.approved && p.role === "staff").length}</div><div className="svl">Active Staff</div></div>
+        <div className="stc stc-link" onClick={() => setTab("staff")} title="Click to review"><div className="sv so">{pendingAccounts.length}</div><div className="svl">Pending Accts {pendingAccounts.length > 0 && "→"}</div></div>
+        <div className="stc stc-link" onClick={() => setTab("events")} title="Click to review"><div className="sv sy">{pendingSignups.length}</div><div className="svl">Pending Signups {pendingSignups.length > 0 && "→"}</div></div>
+        <div className="stc stc-link" onClick={() => setTab("cr")} title="Click to review"><div className="sv" style={{color:"var(--r)"}}>{pendingCR.length}</div><div className="svl">Withdrawals {pendingCR.length > 0 && "→"}</div></div>
+        <div className="stc stc-link" onClick={() => setTab("att")} title="View attendance"><div className="sv sg">{attendance.filter(a => a.sign_out_time).reduce((s, a) => s + (parseFloat(calcHours(a.sign_in_time, a.sign_out_time)) || 0), 0).toFixed(0)}</div><div className="svl">Total Hrs</div></div>
       </div>
 
       {(pendingAccounts.length > 0 || pendingSignups.length > 0 || pendingCR.length > 0) && (
@@ -1337,7 +1521,26 @@ function CoordView({ profile, notify }) {
               <div className="evh">
                 <div>
                   <div className="evn">{ev.name} <StatusBadge status={ev.status} /></div>
-                  <div className="evm">{fmtDate(ev.date)} · {fmtTime(ev.time_start)} – {fmtTime(ev.time_end)} · <span className="sts" style={{background:"rgba(167,139,250,.2)",color:"var(--p)"}}>Shift {getShiftForDate(ev.date)}</span></div>
+                  <div className="evm">{fmtDate(ev.date)} · {fmtTime(ev.time_start)} – {fmtTime(ev.time_end)} · <span className="sts" style={{background:"rgba(167,139,250,.2)",color:"var(--p)"}}>Shift {getShiftForDate(ev.date)}</span> · <span style={{fontSize:11,opacity:.85}}>💰 Pays {fmtDate(getPaydayForDate(ev.date))}</span></div>
+                  {(ev.needed_paramedics > 0 || ev.needed_emts > 0 || pendEv.length > 0) && (
+                    <div className="evm" style={{display:"flex",gap:10,flexWrap:"wrap",fontSize:12,marginTop:4,fontWeight:500}}>
+                      {ev.needed_paramedics > 0 && (
+                        <span style={{color: pc >= ev.needed_paramedics ? "var(--g)" : "var(--o)"}}>
+                          {pc >= ev.needed_paramedics ? "✅" : "⏳"} {pc}/{ev.needed_paramedics} medics
+                        </span>
+                      )}
+                      {ev.needed_emts > 0 && (
+                        <span style={{color: ec >= ev.needed_emts ? "var(--g)" : "var(--o)"}}>
+                          {ec >= ev.needed_emts ? "✅" : "⏳"} {ec}/{ev.needed_emts} EMT
+                        </span>
+                      )}
+                      {pendEv.length > 0 && (
+                        <span style={{color: "var(--y)"}}>
+                          ⏳ {pendEv.length} awaiting decision
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {(ev.venue || ev.location) && <div className="loc">
                     {ev.venue && <span style={{ fontWeight: 500, color: "var(--t)" }}>{ev.venue}</span>}
                     {ev.venue && ev.location && " · "}
@@ -1354,6 +1557,22 @@ function CoordView({ profile, notify }) {
                 </div>
               </div>
               {ev.notes && <div className="nts">📋 {ev.notes}</div>}
+              {(!ev.time_start || ev.time_start === "TBA" || !ev.time_end || ev.time_end === "TBA") && (
+                <div style={{padding:"8px 14px",background:"rgba(255,217,61,.08)",borderTop:"1px solid rgba(255,217,61,.3)",fontSize:12,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                  <span>⏰ Time TBA</span>
+                  {updTimeEv === ev.id ? (
+                    <>
+                      <input type="time" value={updTime.start} onChange={e=>setUpdTime(p=>({...p,start:e.target.value}))} style={{fontSize:12,padding:"2px 4px"}} />
+                      <span>–</span>
+                      <input type="time" value={updTime.end} onChange={e=>setUpdTime(p=>({...p,end:e.target.value}))} style={{fontSize:12,padding:"2px 4px"}} />
+                      <button className="bt bts btg" onClick={()=>saveTimeUpdate(ev.id)}>Save</button>
+                      <button className="bt bts bp" onClick={()=>{setUpdTimeEv(null);setUpdTime({start:"",end:""});}}>Cancel</button>
+                    </>
+                  ) : (
+                    <button className="bt bts bta" onClick={()=>{setUpdTime({start:ev.time_start && ev.time_start !== "TBA" ? ev.time_start.slice(0,5) : "", end:ev.time_end && ev.time_end !== "TBA" ? ev.time_end.slice(0,5) : ""});setUpdTimeEv(ev.id);}}>Update Time</button>
+                  )}
+                </div>
+              )}
               <div className="slb">
                 <div className="sb"><div className="sl"><span>Medics</span><span>{pc}/{ev.needed_paramedics}</span></div><div className="st"><div className={`sf p${pc >= ev.needed_paramedics ? " fu" : ""}`} style={{ width: `${Math.min(100, (pc / (ev.needed_paramedics || 1)) * 100)}%` }} /></div></div>
                 <div className="sb"><div className="sl"><span>EMT</span><span>{ec}/{ev.needed_emts}</span></div><div className="st"><div className={`sf e${ec >= ev.needed_emts ? " fu" : ""}`} style={{ width: `${Math.min(100, (ec / (ev.needed_emts || 1)) * 100)}%` }} /></div></div>
@@ -1379,7 +1598,7 @@ function CoordView({ profile, notify }) {
                     });
                     return (
                     <div className="pend-section">
-                      <div className="sct" style={{ color: "var(--o)" }}>⏳ Pending Approval ({pendEv.length})</div>
+                      <div className="sct" style={{ color: "var(--o)" }}>⏳ Awaiting Decision ({pendEv.length})</div>
                       <div style={{ fontSize: 10, color: "var(--t2)", marginBottom: 8 }}>Sorted: Paramedic → EMT Advanced → EMT Basic. Within each group: off-duty ranks higher, Kelly Day off ranks higher, then earliest signup time wins.</div>
                       {sorted.map(s => {
                         const ac = profiles.find(p => p.id === s.staff_id); if (!ac) return null;
@@ -1454,6 +1673,22 @@ function CoordView({ profile, notify }) {
                       </div>
                     );
                   })}
+                  <div className="dv" />
+                  <div style={{margin:"4px 0",padding:12,background:"var(--s)",border:"1px dashed var(--bd)",borderRadius:8}}>
+                    <div style={{fontSize:12,fontWeight:600,marginBottom:4}}>➕ Add Staff Manually</div>
+                    <div style={{fontSize:10,color:"var(--t2)",marginBottom:8}}>Use this when Chief tells you someone is working but they haven't signed up through the app. Added staff are confirmed immediately — no pending step.</div>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                      <select className="fi" value={addStaffSel} onChange={e=>setAddStaffSel(e.target.value)} style={{flex:"1 1 200px",fontSize:13,minWidth:0}}>
+                        <option value="">— Select staff —</option>
+                        {profiles
+                          .filter(p => !signups.find(s => s.event_id === ev.id && s.staff_id === p.id && s.status !== "cancelled"))
+                          .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+                          .map(p => <option key={p.id} value={p.id}>{p.name} ({p.level || "—"} · Shift {p.shift || "?"}){!p.approved ? " · ⏳ pending account" : ""}</option>)
+                        }
+                      </select>
+                      <button className="bt btg" disabled={!addStaffSel} onClick={() => manuallyAddStaff(ev.id, addStaffSel)} style={{whiteSpace:"nowrap"}}>Add</button>
+                    </div>
+                  </div>
                 </div>
               )}
             </>)}
@@ -1665,6 +1900,52 @@ function CoordView({ profile, notify }) {
       </>);
     })()}
 
+    {/* ── HEALTH TAB ── */}
+    {tab === "health" && <>
+      <div className="sct">🏥 Data Health Checks</div>
+      <div style={{fontSize:12,color:"var(--t2)",marginBottom:14}}>Automated integrity checks across the database. Run these before each event to catch issues early.</div>
+      {(() => {
+        const seen = new Set();
+        const dupSignups = [];
+        signups.forEach(s => {
+          if (s.status === "cancelled") return;
+          const key = s.staff_id + "|" + s.event_id;
+          if (seen.has(key)) dupSignups.push(s); else seen.add(key);
+        });
+        const noSignupStaff = profiles.filter(p => p.approved && p.role === "staff" && !signups.find(s => s.staff_id === p.id));
+        const missingFields = events.filter(e => !e.time_start || e.time_start === "TBA" || !e.time_end || e.time_end === "TBA" || (!e.venue && !e.location));
+        const ghostSignups = signups.filter(s => !events.find(e => e.id === s.event_id));
+
+        const issues = [
+          { id: "dup", label: "Duplicate signups (same staff + event)", count: dupSignups.length, color: "var(--r)", details: dupSignups.slice(0, 5).map(s => { const ev = events.find(e => e.id === s.event_id); const p = profiles.find(x => x.id === s.staff_id); return `${p?.name || "?"} → ${ev?.name || "?"} (${s.status})`; }) },
+          { id: "nosignup", label: "Approved staff with zero signups", count: noSignupStaff.length, color: "var(--y)", details: noSignupStaff.slice(0, 10).map(p => `${p.name} (${p.level || "?"})`) },
+          { id: "missing", label: "Events missing time or venue", count: missingFields.length, color: "var(--y)", details: missingFields.slice(0, 5).map(e => `${e.name} (${fmtDate(e.date)})`) },
+          { id: "ghost", label: "Signups for deleted events", count: ghostSignups.length, color: "var(--r)", details: ghostSignups.slice(0, 5).map(s => { const p = profiles.find(x => x.id === s.staff_id); return `${p?.name || "?"} · event ID ${s.event_id}`; }) },
+        ];
+        const totalIssues = issues.reduce((s, i) => s + i.count, 0);
+
+        return (<>
+          <div className="cd" style={{padding:14,marginBottom:12,background: totalIssues === 0 ? "rgba(74,222,128,.08)" : "rgba(255,217,61,.08)", borderColor: totalIssues === 0 ? "rgba(74,222,128,.3)" : "rgba(255,217,61,.3)"}}>
+            {totalIssues === 0 ? "✅ All data integrity checks pass — no issues found." : `⚠️ Found ${totalIssues} issue${totalIssues === 1 ? "" : "s"} across ${issues.filter(i => i.count > 0).length} categor${issues.filter(i => i.count > 0).length === 1 ? "y" : "ies"}.`}
+          </div>
+          {issues.map(issue => (
+            <div className="cd" key={issue.id} style={{padding:12,marginBottom:10,opacity: issue.count === 0 ? .55 : 1}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{fontWeight:600}}>{issue.count === 0 ? "✅" : "⚠️"} {issue.label}</span>
+                <span style={{color: issue.count === 0 ? "var(--g)" : issue.color, fontWeight:700}}>{issue.count}</span>
+              </div>
+              {issue.count > 0 && issue.details.length > 0 && (
+                <ul style={{margin:"8px 0 0 0", padding:"0 0 0 18px", fontSize:12, color:"var(--t2)"}}>
+                  {issue.details.map((d, i) => <li key={i}>{d}</li>)}
+                  {issue.count > issue.details.length && <li style={{listStyle:"none",paddingLeft:0,fontStyle:"italic"}}>...and {issue.count - issue.details.length} more</li>}
+                </ul>
+              )}
+            </div>
+          ))}
+        </>);
+      })()}
+    </>}
+
     {/* ── IMPORT TAB ── */}
     {tab === "import" && <>
       <div className="ur">
@@ -1748,9 +2029,132 @@ function CoordView({ profile, notify }) {
     </>}
   </>);
 }
-function StaffView({ profile, notify }) {
+function MyProfileTab({ profile, notify, refresh }) {
+  const [staffProfSaving, setStaffProfSaving] = useState(false);
+  const [staffProfMsg, setStaffProfMsg] = useState("");
+  const [staffEditProf, setStaffEditProf] = useState({
+    name: profile.name||"", email: profile.email||"", phone: profile.phone||"",
+    level: profile.level||"", shift: profile.shift||"", kelly_number: profile.kelly_number||"",
+    availability: profile.availability || "available",
+    avail_note: profile.avail_note || ""
+  });
+  const [showPwModal, setShowPwModal] = useState(false);
+  return (<>
+    <div className="sct">👤 My Profile</div>
+    {/* Current info */}
+    <div style={{background:"var(--s)",border:"1px solid var(--bd)",borderRadius:10,padding:14,marginBottom:14,fontSize:13}}>
+      <div style={{fontWeight:700,fontSize:15,marginBottom:8}}>{profile.name}</div>
+      <div style={{color:"var(--t2)",lineHeight:1.8}}>
+        <div>📧 {profile.email}</div>
+        <div>📞 {profile.phone||<span style={{color:"var(--o)"}}>No phone set</span>}</div>
+        <div>🚒 {profile.level||<span style={{color:"var(--o)"}}>No level</span>} · Shift {profile.shift||<span style={{color:"var(--o)"}}>?</span>}</div>
+        <div>📅 Kelly Day #: {profile.kelly_number||<span style={{color:"var(--o)"}}>Not set — ask your supervisor</span>}</div>
+        {(() => {
+          if (!profile.kelly_number || !profile.shift || profile.shift === "Days") return null;
+          const today = new Date(); today.setHours(0,0,0,0);
+          const next = [];
+          for (let i = 0; i < 365 && next.length < 5; i++) {
+            const d = new Date(today); d.setDate(d.getDate() + i);
+            const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+            if (isKellyDay(iso, profile.kelly_number, profile.shift)) next.push(iso);
+          }
+          if (next.length === 0) return null;
+          return (
+            <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid var(--bd)"}}>
+              <div style={{fontSize:11,color:"var(--t2)",marginBottom:4}}>🟢 Your next Kelly Days (off duty)</div>
+              {next.map(iso => <div key={iso} style={{fontSize:12,paddingLeft:8}}>· {fmtDate(iso)}</div>)}
+            </div>
+          );
+        })()}
+        <div>{profile.availability === "unavailable" ? "🚫 Status: Unavailable" : "✅ Status: Available"}</div>
+        {profile.avail_note && <div style={{marginTop:6,padding:8,background:"rgba(0,0,0,.2)",borderRadius:6,fontSize:12,whiteSpace:"pre-wrap",color:"var(--t)"}}>📝 {profile.avail_note}</div>}
+      </div>
+    </div>
+    {/* Edit form */}
+    <div style={{background:"var(--s)",border:"1px solid var(--bd)",borderRadius:10,padding:14}}>
+      <div style={{fontSize:11,color:"var(--t2)",marginBottom:12}}>Update your information below.</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+        <div style={{gridColumn:"1/-1"}}>
+          <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:4}}>Full Name</label>
+          <input className="fi" value={staffEditProf.name} onChange={e=>setStaffEditProf(p=>({...p,name:e.target.value}))} style={{fontSize:13}} />
+        </div>
+        <div>
+          <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:4}}>Phone</label>
+          <input className="fi" type="tel" value={staffEditProf.phone} onChange={e=>setStaffEditProf(p=>({...p,phone:e.target.value}))} placeholder="205-555-0100" style={{fontSize:13}} />
+        </div>
+        <div>
+          <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:4}}>Level</label>
+          <select className="fi" value={staffEditProf.level} onChange={e=>setStaffEditProf(p=>({...p,level:e.target.value}))} style={{fontSize:13}}>
+            <option value="">— Select —</option>
+            <option value="Paramedic">Paramedic</option>
+            <option value="EMT Advanced">EMT Advanced</option>
+            <option value="EMT">EMT Basic</option>
+          </select>
+        </div>
+        <div>
+          <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:4}}>Shift</label>
+          <select className="fi" value={staffEditProf.shift} onChange={e=>setStaffEditProf(p=>({...p,shift:e.target.value}))} style={{fontSize:13}}>
+            <option value="">— Select —</option>
+            <option value="A">A Shift</option>
+            <option value="B">B Shift</option>
+            <option value="C">C Shift</option>
+            <option value="Days">Days</option>
+          </select>
+        </div>
+        <div>
+          <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:4}}>Kelly Day # <span style={{opacity:.6}}>(1–9)</span></label>
+          <select className="fi" value={staffEditProf.kelly_number} onChange={e=>setStaffEditProf(p=>({...p,kelly_number:e.target.value}))} style={{fontSize:13}}>
+            <option value="">— Select —</option>
+            {[1,2,3,4,5,6,7,8,9].map(n=><option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+        <div style={{gridColumn:"1/-1",display:"flex",alignItems:"center",gap:8,padding:"4px 0"}}>
+          <input type="checkbox" id="avail-cb" checked={staffEditProf.availability === "available"} onChange={e=>setStaffEditProf(p=>({...p,availability: e.target.checked ? "available" : "unavailable"}))} style={{cursor:"pointer",width:16,height:16}} />
+          <label htmlFor="avail-cb" style={{fontSize:12,cursor:"pointer"}}>I'm available to work special events</label>
+        </div>
+        <div style={{gridColumn:"1/-1"}}>
+          <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:4}}>Note to Coordinator <span style={{opacity:.6}}>(optional — availability notes, certifications, preferences)</span></label>
+          <textarea className="fi" rows={3} value={staffEditProf.avail_note} onChange={e=>setStaffEditProf(p=>({...p,avail_note:e.target.value}))} placeholder="e.g. Off duty May 22–25, prefer evening events, ACLS certified..." style={{fontSize:13,fontFamily:"inherit",resize:"vertical",minHeight:60,width:"100%"}} />
+        </div>
+      </div>
+      {staffProfMsg && <div style={{fontSize:12,color:staffProfMsg.includes("✅")?"var(--g)":"var(--r)",marginBottom:8}}>{staffProfMsg}</div>}
+      <button className="bt btg" style={{width:"100%",fontSize:13}} disabled={staffProfSaving} onClick={async()=>{
+        setStaffProfSaving(true); setStaffProfMsg("");
+        const updates = {};
+        if (staffEditProf.name.trim()) updates.name = staffEditProf.name.trim();
+        if (staffEditProf.phone.trim()) updates.phone = staffEditProf.phone.trim();
+        if (staffEditProf.level) updates.level = staffEditProf.level;
+        if (staffEditProf.shift) updates.shift = staffEditProf.shift;
+        if (staffEditProf.kelly_number) updates.kelly_number = parseInt(staffEditProf.kelly_number);
+        updates.availability = staffEditProf.availability;
+        updates.avail_note = staffEditProf.avail_note.trim();
+        const { error } = await supabase.from("profiles").update(updates).eq("id", profile.id);
+        setStaffProfSaving(false);
+        if (error) { setStaffProfMsg("❌ " + error.message); }
+        else { setStaffProfMsg("✅ Profile saved!"); refresh(); }
+      }}>{staffProfSaving ? "Saving..." : "💾 Save Profile"}</button>
+    </div>
+    {/* Change Password */}
+    <div style={{marginTop:12}}>
+      <button className="bt bp" style={{width:"100%",fontSize:13}} onClick={() => setShowPwModal(true)}>🔑 Change Password</button>
+    </div>
+    {showPwModal && <ChangePassword onClose={() => setShowPwModal(false)} notify={notify} />}
+  </>);
+}
+
+function StaffView({ profile, notify, openHelpChat }) {
   const { profiles, events, signups, attendance, cancelReqs, activityLog, loading, refresh } = useData();
   const [tab, setTab] = useState("events");
+  const [expandedPeriods, setExpandedPeriods] = useState(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const p = getPayPeriodForDate(today);
+    return new Set(p ? [p.payday] : []);
+  });
+  const togglePeriod = (payday) => setExpandedPeriods(prev => {
+    const next = new Set(prev);
+    if (next.has(payday)) next.delete(payday); else next.add(payday);
+    return next;
+  });
 
   const mySignups = signups.filter(s => s.staff_id === profile.id && (s.status === "confirmed" || s.status === "pending"));
   // Open slot alerts — events with a slot opened in last 24hrs that I haven't signed up for
@@ -1758,7 +2162,7 @@ function StaffView({ profile, notify }) {
     const yesterday = new Date(Date.now() - 86400000).toISOString();
     return activityLog
       .filter(a => a.action === "slot_opened" && a.created_at > yesterday)
-      .map(a => a.record_id)
+      .map(a => a.target_id)
       .filter(evId => !mySignups.find(s => s.event_id === evId));
   }, [activityLog, mySignups]);
   const myAtt = attendance.filter(a => a.staff_id === profile.id);
@@ -1770,7 +2174,64 @@ function StaffView({ profile, notify }) {
     return myAtt.filter(a => a.sign_out_time).reduce((s, a) => s + (parseFloat(calcHours(a.sign_in_time, a.sign_out_time)) || 0), 0);
   }, [myAtt]);
 
+  const myScheduledHours = useMemo(() => {
+    return mySignups.filter(s => s.status === "confirmed").reduce((sum, s) => {
+      const ev = events.find(e => e.id === s.event_id);
+      return sum + eventHours(ev);
+    }, 0);
+  }, [mySignups, events]);
+
+  const monthGroups = useMemo(() => {
+    const byPayday = new Map();
+    const todayISO = new Date().toISOString().slice(0, 10);
+    mySignups.filter(s => s.status === "confirmed").forEach(s => {
+      const ev = events.find(e => e.id === s.event_id);
+      if (!ev || !ev.date) return;
+      const period = getPayPeriodForDate(ev.date);
+      if (!period) return;
+      if (!byPayday.has(period.payday)) byPayday.set(period.payday, { period, events: [], orphans: [] });
+      const slot = byPayday.get(period.payday);
+      const scheduled = eventHours(ev);
+      const att = myAtt.find(a => a.event_id === ev.id);
+      let status, worked = 0;
+      if (att?.sign_in_time && att?.sign_out_time) { status = "worked"; worked = parseFloat(calcHours(att.sign_in_time, att.sign_out_time)) || 0; }
+      else if (att?.sign_in_time) { status = "in_progress"; }
+      else { status = (ev.date < todayISO) ? "missed" : "upcoming"; }
+      slot.events.push({ ev, scheduled, worked, status, att });
+    });
+    myAtt.forEach(a => {
+      const ev = events.find(e => e.id === a.event_id);
+      if (ev && ev.date) return;
+      if (!a.sign_in_time) return;
+      const isoDate = new Date(a.sign_in_time).toISOString().slice(0, 10);
+      const period = getPayPeriodForDate(isoDate);
+      if (!period) return;
+      if (!byPayday.has(period.payday)) byPayday.set(period.payday, { period, events: [], orphans: [] });
+      byPayday.get(period.payday).orphans.push(a);
+    });
+    const periodsSorted = [...byPayday.values()].map(slot => {
+      const scheduled = slot.events.reduce((s, e) => s + e.scheduled, 0);
+      const eventsWorked = slot.events.reduce((s, e) => s + e.worked, 0);
+      const orphansWorked = slot.orphans.reduce((s, o) => s + (o.sign_out_time ? (parseFloat(calcHours(o.sign_in_time, o.sign_out_time)) || 0) : 0), 0);
+      return { ...slot.period, scheduled, worked: eventsWorked + orphansWorked, events: slot.events.sort((a, b) => (a.ev.date || "").localeCompare(b.ev.date || "")), orphans: slot.orphans };
+    }).sort((a, b) => a.payday.localeCompare(b.payday));
+    const months = new Map();
+    periodsSorted.forEach(p => {
+      const key = p.payday.slice(0, 7);
+      if (!months.has(key)) {
+        const dt = new Date(p.payday + "T00:00:00");
+        months.set(key, { key, label: dt.toLocaleDateString("en-US", { month: "long", year: "numeric" }), periods: [], scheduled: 0, worked: 0 });
+      }
+      const m = months.get(key);
+      m.periods.push(p);
+      m.scheduled += p.scheduled;
+      m.worked += p.worked;
+    });
+    return [...months.values()];
+  }, [mySignups, events, myAtt]);
+
   const signUpForEvent = async (eventId) => {
+    if (!profile?.id) { notify("Your profile didn't load correctly. Please refresh the page or log out and back in.", "error"); return; }
     const ev = events.find(e => e.id === eventId);
     if (ev?.status !== "open") { notify("Event is not open for signups.", "error"); return; }
     if (mySignups.find(s => s.event_id === eventId)) { notify("Already signed up.", "error"); return; }
@@ -1780,7 +2241,8 @@ function StaffView({ profile, notify }) {
     const { error } = await supabase.from("signups").insert({ staff_id: profile.id, event_id: eventId, status: "pending", signed_up_at: nowISO() });
     if (error) { notify(error.message, "error"); return; }
     await logActivity("signed_up", "signup", eventId, { eventName: ev?.name });
-    sendNotification("event_signup", { staffName: profile.name, staffLevel: profile.level, eventName: ev?.name, eventDate: fmtDate(ev?.date) });
+    // Email muted May 18 2026 (Eric: emails only for cancel-related events)
+    // sendNotification("event_signup", { staffName: profile.name, staffLevel: profile.level, eventName: ev?.name, eventDate: fmtDate(ev?.date) });
     if (conflicts.length > 0) {
       notify(`Signup sent! Note: overlaps with ${conflicts.map(c => c.name).join(", ")} — coordinator will decide.`, "warn");
     } else {
@@ -1796,7 +2258,8 @@ function StaffView({ profile, notify }) {
 
     // Pending → just withdraw
     if (mySU.status === "pending") {
-      await supabase.from("signups").delete().eq("id", mySU.id);
+      const { error } = await supabase.from("signups").delete().eq("id", mySU.id);
+      if (error) { notify(`Failed to withdraw: ${error.message}. Try again.`, "error"); return; }
       await logActivity("withdrew_signup", "signup", eventId, { eventName: ev?.name });
       notify("Signup withdrawn."); refresh(); return;
     }
@@ -1804,9 +2267,11 @@ function StaffView({ profile, notify }) {
     // Confirmed → always requires coordinator approval
     const existingCR = myCR.find(c => c.event_id === eventId && c.status === "pending");
     if (existingCR) { notify("Withdrawal request already pending — awaiting coordinator approval.", "warn"); return; }
-    await supabase.from("cancel_requests").insert({ staff_id: profile.id, event_id: eventId, status: "pending", requested_at: nowISO() });
+    const { error } = await supabase.from("cancel_requests").insert({ staff_id: profile.id, event_id: eventId, status: "pending", requested_at: nowISO() });
+    if (error) { notify(`Failed to request withdrawal: ${error.message}. Try again.`, "error"); return; }
     await logActivity("requested_cancel", "cancel_request", eventId, { eventName: ev?.name });
-    sendNotification("cancel_request", { staffName: profile.name, eventName: ev?.name });
+    // Email muted May 18 2026 (Eric: no request or approval emails)
+    // sendNotification("cancel_request", { staffName: profile.name, eventName: ev?.name });
     notify("Withdrawal request sent — awaiting coordinator approval.", "warn");
     refresh();
   };
@@ -1846,7 +2311,7 @@ function StaffView({ profile, notify }) {
 
   return (<>
     <div className="tabs">
-      <button className={`tb${tab === "events" ? " on" : ""}`} onClick={() => setTab("events")}>All Events</button>
+      <button className={`tb${tab === "events" ? " on" : ""}`} onClick={() => setTab("events")}>Dashboard</button>
       <button className={`tb${tab === "my" ? " on" : ""}`} onClick={() => setTab("my")}>My Events ({mySignups.length})</button>
       <button className={`tb${tab === "hours" ? " on" : ""}`} onClick={() => setTab("hours")}>My Hours</button>
       <button className={`tb${tab === "cr" ? " on" : ""}`} onClick={() => setTab("cr")}>Cancel Reqs{pendingCRCount > 0 && <span className="nd or">{pendingCRCount}</span>}</button>
@@ -1856,9 +2321,12 @@ function StaffView({ profile, notify }) {
     {/* ── ALL EVENTS ── */}
     {tab === "events" && <>
       <div className="stw">
-        <div className="stc"><div className="sv sa">{visibleEvents.length}</div><div className="svl">Events</div></div>
-        <div className="stc"><div className="sv so">{mySignups.filter(s=>s.status==="pending").length}</div><div className="svl">Pending</div></div><div className="stc"><div className="sv sg">{mySignups.filter(s=>s.status==="confirmed").length}</div><div className="svl">Approved</div></div>
-        <div className="stc"><div className="sv sy">{myTotalHours.toFixed(1)}</div><div className="svl">My Hours</div></div>
+        <div className="stc stc-link" onClick={() => setTab("events")} title="View all events"><div className="sv sa">{visibleEvents.length}</div><div className="svl">Events</div></div>
+        <div className="stc stc-link" onClick={() => setTab("my")} title="View your events"><div className="sv so">{mySignups.filter(s=>s.status==="pending").length}</div><div className="svl">Pending</div></div>
+        <div className="stc stc-link" onClick={() => setTab("my")} title="View your events"><div className="sv sg">{mySignups.filter(s=>s.status==="confirmed").length}</div><div className="svl">Approved</div></div>
+        <div className="stc stc-link" onClick={() => setTab("hours")} title="View your hours"><div className="sv sy">{myTotalHours.toFixed(1)}</div><div className="svl">My Hours</div></div>
+        <div className="stc stc-link" onClick={() => setTab("profile")} title="Edit your profile"><div className="sv sa" style={{fontSize:20}}>👤</div><div className="svl">My Profile</div></div>
+        <div className="stc stc-link" onClick={openHelpChat} title="Ask the app assistant"><div className="sv sa" style={{fontSize:20}}>🤖</div><div className="svl">Help</div></div>
       </div>
       {visibleEvents.map(ev => {
         const es = signups.filter(s => s.event_id === ev.id && s.status === "confirmed");
@@ -1875,7 +2343,7 @@ function StaffView({ profile, notify }) {
             <div className="evh">
               <div>
                 <div className="evn">{ev.name} <StatusBadge status={ev.status} /> {isMine && <SignupBadge status={myS?.status || "pending"} />} {isMine && myCR.find(c => c.event_id === ev.id && c.status === "pending") && <span className="bg so2">⏳ Withdrawal Pending</span>} {!isMine && recentSlots.includes(ev.id) && <span className="slot-badge">🚨 Open Slot!</span>} {hasConflict && !isMine && <span className="bg so2">⚡ Overlap</span>}</div>
-                <div className="evm">{fmtDate(ev.date)} · {fmtTime(ev.time_start)} – {fmtTime(ev.time_end)} · <span className="sts" style={{background:"rgba(167,139,250,.2)",color:"var(--p)"}}>Shift {getShiftForDate(ev.date)}</span></div>
+                <div className="evm">{fmtDate(ev.date)} · {fmtTime(ev.time_start)} – {fmtTime(ev.time_end)} · <span className="sts" style={{background:"rgba(167,139,250,.2)",color:"var(--p)"}}>Shift {getShiftForDate(ev.date)}</span> · <span style={{fontSize:11,opacity:.85}}>💰 Pays {fmtDate(getPaydayForDate(ev.date))}</span></div>
                 {(ev.venue || ev.location) && <div className="loc">
                   {ev.venue && <span style={{ fontWeight: 500, color: "var(--t)" }}>{ev.venue}</span>}
                   {ev.venue && ev.location && " · "}
@@ -1890,7 +2358,7 @@ function StaffView({ profile, notify }) {
               </div>
             </div>
             {ev.notes && <div className="nts">📋 {ev.notes}</div>}
-            {(() => { const evShift = getShiftForDate(ev.date); const offDay = NEXT_SHIFT[profile.shift]; if (evShift === profile.shift) return <div className="shift-warn">⚠️ Reminder: You will be on regular duty (Shift {profile.shift}) this day.</div>; if (evShift === offDay && ev.time_start < "08:00") return <div className="shift-warn">⚠️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts before 0800 — you WILL arrive late.</div>; if (evShift === offDay) return <div className="shift-warn" style={{borderColor:"rgba(0,212,255,.2)",color:"var(--a)"}}>ℹ️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts after your shift ends.</div>; return null; })()}
+            {(() => { const evShift = getShiftForDate(ev.date); const offDay = NEXT_SHIFT[profile.shift]; const isKelly = isKellyDay(ev.date, profile.kelly_number, profile.shift); if (isKelly) return <div className="shift-warn" style={{borderColor:"rgba(74,222,128,.3)",color:"var(--g)"}}>🟢 This is your Kelly Day — you're off duty and available to work this event.</div>; if (evShift === profile.shift) return <div className="shift-warn">⚠️ Reminder: You will be on regular duty (Shift {profile.shift}) this day.</div>; if (evShift === offDay && ev.time_start < "08:00") return <div className="shift-warn">⚠️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts before 0800 — you WILL arrive late.</div>; if (evShift === offDay) return <div className="shift-warn" style={{borderColor:"rgba(0,212,255,.2)",color:"var(--a)"}}>ℹ️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts after your shift ends.</div>; return null; })()}
             {hasConflict && !isMine && <div className="shift-warn">⚡ Overlaps with: {conflicts.map(c => c.name).join(", ")}. You can still sign up — coordinator will decide which event to assign you.</div>}
             {/* Slot bars hidden from staff view */}
             {myAttRec && (
@@ -1916,7 +2384,7 @@ function StaffView({ profile, notify }) {
             <div className="evh">
               <div>
                 <div className="evn">{ev.name} <SignupBadge status={s.status} /></div>
-                <div className="evm">{fmtDate(ev.date)} · {fmtTime(ev.time_start)} – {fmtTime(ev.time_end)} · <span className="sts" style={{background:"rgba(167,139,250,.2)",color:"var(--p)"}}>Shift {getShiftForDate(ev.date)}</span></div>
+                <div className="evm">{fmtDate(ev.date)} · {fmtTime(ev.time_start)} – {fmtTime(ev.time_end)} · <span className="sts" style={{background:"rgba(167,139,250,.2)",color:"var(--p)"}}>Shift {getShiftForDate(ev.date)}</span> · <span style={{fontSize:11,opacity:.85}}>💰 Pays {fmtDate(getPaydayForDate(ev.date))}</span></div>
                 {(ev.venue || ev.location) && <div className="loc">
                   {ev.venue && <span style={{ fontWeight: 500, color: "var(--t)" }}>{ev.venue}</span>}
                   {ev.venue && ev.location && " · "}
@@ -1930,7 +2398,7 @@ function StaffView({ profile, notify }) {
               </div>
             </div>
             {ev.notes && <div className="nts">📋 {ev.notes}</div>}
-            {(() => { const evShift = getShiftForDate(ev.date); const offDay = NEXT_SHIFT[profile.shift]; if (evShift === profile.shift) return <div className="shift-warn">⚠️ Reminder: You will be on regular duty (Shift {profile.shift}) this day.</div>; if (evShift === offDay && ev.time_start < "08:00") return <div className="shift-warn">⚠️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts before 0800 — you WILL arrive late.</div>; if (evShift === offDay) return <div className="shift-warn" style={{borderColor:"rgba(0,212,255,.2)",color:"var(--a)"}}>ℹ️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts after your shift ends.</div>; return null; })()}
+            {(() => { const evShift = getShiftForDate(ev.date); const offDay = NEXT_SHIFT[profile.shift]; const isKelly = isKellyDay(ev.date, profile.kelly_number, profile.shift); if (isKelly) return <div className="shift-warn" style={{borderColor:"rgba(74,222,128,.3)",color:"var(--g)"}}>🟢 This is your Kelly Day — you're off duty and available to work this event.</div>; if (evShift === profile.shift) return <div className="shift-warn">⚠️ Reminder: You will be on regular duty (Shift {profile.shift}) this day.</div>; if (evShift === offDay && ev.time_start < "08:00") return <div className="shift-warn">⚠️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts before 0800 — you WILL arrive late.</div>; if (evShift === offDay) return <div className="shift-warn" style={{borderColor:"rgba(0,212,255,.2)",color:"var(--a)"}}>ℹ️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts after your shift ends.</div>; return null; })()}
             {myAttRec && (
               <div style={{ marginTop: 8, fontSize: 11, color: "var(--t2)", fontFamily: "'DM Mono', monospace" }}>
                 In: {fmtDateTime(myAttRec.sign_in_time)}{myAttRec.sign_out_time && ` · Out: ${fmtDateTime(myAttRec.sign_out_time)} · ${calcHours(myAttRec.sign_in_time, myAttRec.sign_out_time)} hrs`}
@@ -1943,18 +2411,56 @@ function StaffView({ profile, notify }) {
 
     {/* ── MY HOURS ── */}
     {tab === "hours" && <>
-      <div className="stw">
-        <div className="stc"><div className="sv sg">{myTotalHours.toFixed(1)}</div><div className="svl">Total Hours</div></div>
-        <div className="stc"><div className="sv sa">{myAtt.filter(a => a.sign_out_time).length}</div><div className="svl">Completed</div></div>
-        <div className="stc"><div className="sv sy">{myAtt.filter(a => !a.sign_out_time).length}</div><div className="svl">Active</div></div>
-      </div>
-      <div className="cd"><table className="lt">
-        <thead><tr><th>Event</th><th>Date</th><th>Clock In</th><th>Clock Out</th><th>Hrs</th></tr></thead>
-        <tbody>{myAtt.map(a => {
-          const ev = events.find(x => x.id === a.event_id);
-          return (<tr key={a.id}><td>{ev?.name || "?"}</td><td>{fmtDate(ev?.date)}</td><td>{fmtDateTime(a.sign_in_time)}</td><td>{a.sign_out_time ? fmtDateTime(a.sign_out_time) : <span className="bg si">Active</span>}</td><td>{a.sign_out_time ? calcHours(a.sign_in_time, a.sign_out_time) + " hrs" : "—"}</td></tr>);
-        })}</tbody>
-      </table></div>
+      {myAtt.filter(a => !a.sign_out_time).length > 0 && (
+        <div className="cd" style={{padding:"10px 14px",marginBottom:14,background:"rgba(255,217,61,.08)",borderColor:"rgba(255,217,61,.3)"}}>
+          ⏳ You have {myAtt.filter(a => !a.sign_out_time).length} active clock-in{myAtt.filter(a => !a.sign_out_time).length === 1 ? "" : "s"}.
+        </div>
+      )}
+      {monthGroups.length === 0 && <div className="ey"><div className="ei">⏱️</div>No confirmed events yet — sign up for events and they'll show here grouped by pay period.</div>}
+      {monthGroups.map(month => (
+        <div key={month.key} style={{marginBottom:24}}>
+          <div style={{fontSize:14,fontWeight:600,color:"var(--t)",padding:"8px 4px",borderBottom:"1px solid var(--bd)",marginBottom:8}}>
+            📅 {month.label} Total — <span style={{color:"var(--a)"}}>{month.scheduled.toFixed(1)} hrs scheduled</span> | <span style={{color:"var(--g)"}}>{month.worked.toFixed(1)} hrs worked</span>
+          </div>
+          {month.periods.map(p => {
+            const open = expandedPeriods.has(p.payday);
+            return (
+              <div key={p.payday} className="cd" style={{marginBottom:10,padding:0,overflow:"hidden"}}>
+                <button onClick={() => togglePeriod(p.payday)} style={{width:"100%",padding:"12px 14px",background:"transparent",border:"none",borderBottom: open ? "1px solid var(--bd)" : "none",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",color:"var(--t)",fontFamily:"inherit",textAlign:"left",gap:8,flexWrap:"wrap"}}>
+                  <span style={{fontWeight:600}}>💰 {p.checkLabel} <span style={{color:"var(--t2)",fontWeight:400,fontSize:12}}>({p.rangeLabel})</span></span>
+                  <span style={{color:"var(--t2)",fontSize:12}}>{p.scheduled.toFixed(1)} sched | {p.worked.toFixed(1)} worked <span style={{marginLeft:6}}>{open ? "▾" : "▸"}</span></span>
+                </button>
+                {open && p.events.map(row => {
+                  const ev = row.ev;
+                  const isTBA = !ev.time_start || ev.time_start === "TBA";
+                  return (
+                    <div key={ev.id} style={{padding:"10px 14px",borderTop:"1px solid var(--bd)"}}>
+                      <div style={{fontWeight:600,fontSize:14}}>{ev.name}</div>
+                      <div style={{fontSize:12,color:"var(--t2)",marginTop:2}}>
+                        {fmtDate(ev.date)} · {isTBA ? "Time TBA" : `${fmtTime(ev.time_start)}–${fmtTime(ev.time_end)}`} · 📅 {row.scheduled.toFixed(1)} hrs scheduled
+                      </div>
+                      <div style={{fontSize:12,marginTop:4}}>
+                        {row.status === "worked" && <span style={{color:"var(--g)"}}>✅ Worked: {row.worked.toFixed(1)} hrs <span style={{color:"var(--t2)",fontFamily:"'DM Mono',monospace"}}>· {fmtDateTime(row.att.sign_in_time)} → {fmtDateTime(row.att.sign_out_time)}</span></span>}
+                        {row.status === "in_progress" && <span style={{color:"var(--a)"}}>⏳ In progress — clocked in {fmtDateTime(row.att.sign_in_time)}</span>}
+                        {row.status === "missed" && <span style={{color:"var(--r)"}}>⚠️ Past event — not clocked in</span>}
+                        {row.status === "upcoming" && <span style={{color:"var(--t2)"}}>— Not clocked in yet</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+                {open && p.orphans.map((a, i) => (
+                  <div key={`o-${i}`} style={{padding:"10px 14px",borderTop:"1px solid var(--bd)",background:"rgba(248,113,113,.05)"}}>
+                    <div style={{fontWeight:600,fontSize:14,color:"var(--r)"}}>⚠️ Unknown event (deleted from system)</div>
+                    <div style={{fontSize:11,color:"var(--t2)",marginTop:2,fontFamily:"'DM Mono',monospace"}}>
+                      Clock in: {fmtDateTime(a.sign_in_time)}{a.sign_out_time && ` → ${fmtDateTime(a.sign_out_time)} (${calcHours(a.sign_in_time, a.sign_out_time)} hrs)`}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </>}
 
     {/* ── CANCEL REQUESTS ── */}
@@ -1972,84 +2478,6 @@ function StaffView({ profile, notify }) {
     </>}
 
     {/* ── MY PROFILE TAB ── */}
-    {tab === "profile" && (() => {
-      const [staffProfSaving, setStaffProfSaving] = React.useState(false);
-      const [staffProfMsg, setStaffProfMsg] = React.useState("");
-      const [staffEditProf, setStaffEditProf] = React.useState({
-        name: profile.name||"", email: profile.email||"", phone: profile.phone||"",
-        level: profile.level||"", shift: profile.shift||"", kelly_number: profile.kelly_number||""
-      });
-      return (<>
-        <div className="sct">👤 My Profile</div>
-        {/* Current info */}
-        <div style={{background:"var(--s)",border:"1px solid var(--bd)",borderRadius:10,padding:14,marginBottom:14,fontSize:13}}>
-          <div style={{fontWeight:700,fontSize:15,marginBottom:8}}>{profile.name}</div>
-          <div style={{color:"var(--t2)",lineHeight:1.8}}>
-            <div>📧 {profile.email}</div>
-            <div>📞 {profile.phone||<span style={{color:"var(--o)"}}>No phone set</span>}</div>
-            <div>🚒 {profile.level||<span style={{color:"var(--o)"}}>No level</span>} · Shift {profile.shift||<span style={{color:"var(--o)"}}>?</span>}</div>
-            <div>📅 Kelly Day #: {profile.kelly_number||<span style={{color:"var(--o)"}}>Not set — ask your supervisor</span>}</div>
-          </div>
-        </div>
-        {/* Edit form */}
-        <div style={{background:"var(--s)",border:"1px solid var(--bd)",borderRadius:10,padding:14}}>
-          <div style={{fontSize:11,color:"var(--t2)",marginBottom:12}}>Update your information below.</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-            <div style={{gridColumn:"1/-1"}}>
-              <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:4}}>Full Name</label>
-              <input className="fi" value={staffEditProf.name} onChange={e=>setStaffEditProf(p=>({...p,name:e.target.value}))} style={{fontSize:13}} />
-            </div>
-            <div>
-              <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:4}}>Phone</label>
-              <input className="fi" type="tel" value={staffEditProf.phone} onChange={e=>setStaffEditProf(p=>({...p,phone:e.target.value}))} placeholder="205-555-0100" style={{fontSize:13}} />
-            </div>
-            <div>
-              <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:4}}>Level</label>
-              <select className="fi" value={staffEditProf.level} onChange={e=>setStaffEditProf(p=>({...p,level:e.target.value}))} style={{fontSize:13}}>
-                <option value="">— Select —</option>
-                <option value="Paramedic">Paramedic</option>
-                <option value="EMT Advanced">EMT Advanced</option>
-                <option value="EMT">EMT Basic</option>
-              </select>
-            </div>
-            <div>
-              <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:4}}>Shift</label>
-              <select className="fi" value={staffEditProf.shift} onChange={e=>setStaffEditProf(p=>({...p,shift:e.target.value}))} style={{fontSize:13}}>
-                <option value="">— Select —</option>
-                <option value="A">A Shift</option>
-                <option value="B">B Shift</option>
-                <option value="C">C Shift</option>
-                <option value="Days">Days</option>
-              </select>
-            </div>
-            <div>
-              <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:4}}>Kelly Day # <span style={{opacity:.6}}>(1–9)</span></label>
-              <select className="fi" value={staffEditProf.kelly_number} onChange={e=>setStaffEditProf(p=>({...p,kelly_number:e.target.value}))} style={{fontSize:13}}>
-                <option value="">— Select —</option>
-                {[1,2,3,4,5,6,7,8,9].map(n=><option key={n} value={n}>{n}</option>)}
-              </select>
-            </div>
-          </div>
-          {staffProfMsg && <div style={{fontSize:12,color:staffProfMsg.includes("✅")?"var(--g)":"var(--r)",marginBottom:8}}>{staffProfMsg}</div>}
-          <button className="bt btg" style={{width:"100%",fontSize:13}} disabled={staffProfSaving} onClick={async()=>{
-            setStaffProfSaving(true); setStaffProfMsg("");
-            const updates = {};
-            if (staffEditProf.name.trim()) updates.name = staffEditProf.name.trim();
-            if (staffEditProf.phone.trim()) updates.phone = staffEditProf.phone.trim();
-            if (staffEditProf.level) updates.level = staffEditProf.level;
-            if (staffEditProf.shift) updates.shift = staffEditProf.shift;
-            if (staffEditProf.kelly_number) updates.kelly_number = parseInt(staffEditProf.kelly_number);
-            const { error } = await supabase.from("profiles").update(updates).eq("id", profile.id);
-            setStaffProfSaving(false);
-            if (error) { setStaffProfMsg("❌ " + error.message); }
-            else { setStaffProfMsg("✅ Profile saved!"); refresh(); }
-          }}>{staffProfSaving ? "Saving..." : "💾 Save Profile"}</button>
-        </div>
-        {/* Change Password */}
-        <div style={{marginTop:12}}>
-          <ChangePasswordModal profile={profile} />
-        </div>
-      </>);
-    })()}
+    {tab === "profile" && <MyProfileTab profile={profile} notify={notify} refresh={refresh} />}
   </>);
 }
