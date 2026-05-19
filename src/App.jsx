@@ -1538,7 +1538,7 @@ function CoordView({ profile, notify }) {
                       )}
                       {pendEv.length > 0 && (
                         <span style={{color: "var(--y)"}}>
-                          ⏳ {pendEv.length} awaiting approval
+                          ⏳ {pendEv.length} awaiting decision
                         </span>
                       )}
                     </div>
@@ -1600,7 +1600,7 @@ function CoordView({ profile, notify }) {
                     });
                     return (
                     <div className="pend-section">
-                      <div className="sct" style={{ color: "var(--o)" }}>⏳ Pending Approval ({pendEv.length})</div>
+                      <div className="sct" style={{ color: "var(--o)" }}>⏳ Awaiting Decision ({pendEv.length})</div>
                       <div style={{ fontSize: 10, color: "var(--t2)", marginBottom: 8 }}>Sorted: Paramedic → EMT Advanced → EMT Basic. Within each group: off-duty ranks higher, Kelly Day off ranks higher, then earliest signup time wins.</div>
                       {sorted.map(s => {
                         const ac = profiles.find(p => p.id === s.staff_id); if (!ac) return null;
