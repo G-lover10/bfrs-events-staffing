@@ -36,6 +36,7 @@ exports.handler = async (event) => {
     const data = await res.json();
     return { statusCode: res.status, headers, body: JSON.stringify(data) };
   } catch (e) {
-    return { statusCode: 500, headers, body: JSON.stringify({ error: e.message }) };
+    console.error("chatbot failed:", e);
+    return { statusCode: 500, headers, body: JSON.stringify({ error: { message: "Internal error" } }) };
   }
 };

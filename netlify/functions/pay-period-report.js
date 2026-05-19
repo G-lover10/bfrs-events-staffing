@@ -45,6 +45,7 @@ exports.handler = async (event) => {
     });
     return { statusCode: 200, headers, body: JSON.stringify({ rows }) };
   } catch (e) {
-    return { statusCode: 500, headers, body: JSON.stringify({ error: e.message }) };
+    console.error("pay-period-report failed:", e);
+    return { statusCode: 500, headers, body: JSON.stringify({ error: "Internal error" }) };
   }
 };

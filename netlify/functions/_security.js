@@ -20,9 +20,14 @@ function corsHeaders(origin) {
   };
 }
 
-async function verifyUser(authHeader) {
+function extractBearerToken(authHeader) {
   if (!authHeader) return null;
-  const token = String(authHeader).replace(/^Bearer\s+/i, "");
+  const m = /^Bearer\s+(.+)$/i.exec(String(authHeader));
+  return m ? m[1].trim() : null;
+}
+
+async function verifyUser(authHeader) {
+  const token = extractBearerToken(authHeader);
   if (!token) return null;
   try {
     const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
@@ -35,4 +40,14 @@ async function verifyUser(authHeader) {
   }
 }
 
-module.exports = { corsHeaders, verifyUser };
+// Used for trusted automated callers (GitHub Actions health-check, etc.) that
+// can't carry a Supabase user session. Compares the bearer to env SYSTEM_TOKEN.
+// Both sides must agree on a long random string; rotate by changing both.
+function verifySystem(authHeader) {
+  const expected = process.env.SYSTEM_TOKEN;
+  if (!expected) return false;
+  const token = extractBearerToken(authHeader);
+  return token != null && token === expected;
+}
+
+module.exports = { corsHeaders, verifyUser, verifySystem };

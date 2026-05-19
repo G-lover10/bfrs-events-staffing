@@ -1,4 +1,4 @@
-const { corsHeaders, verifyUser } = require("./_security");
+const { corsHeaders, verifyUser, verifySystem } = require("./_security");
 
 exports.handler = async (event) => {
   const headers = corsHeaders(event.headers?.origin || event.headers?.Origin);
@@ -8,8 +8,9 @@ exports.handler = async (event) => {
     return { statusCode: 405, headers, body: JSON.stringify({ error: "Method not allowed" }) };
   }
 
-  const user = await verifyUser(event.headers?.authorization || event.headers?.Authorization);
-  if (!user) return { statusCode: 401, headers, body: JSON.stringify({ error: "Unauthorized" }) };
+  const authHeader = event.headers?.authorization || event.headers?.Authorization;
+  const authorized = verifySystem(authHeader) || await verifyUser(authHeader);
+  if (!authorized) return { statusCode: 401, headers, body: JSON.stringify({ error: "Unauthorized" }) };
 
   try {
     const payload = JSON.parse(event.body);
@@ -29,6 +30,7 @@ exports.handler = async (event) => {
     const data = await res.json();
     return { statusCode: res.status, headers, body: JSON.stringify(data) };
   } catch (e) {
-    return { statusCode: 500, headers, body: JSON.stringify({ error: e.message }) };
+    console.error("send-email failed:", e);
+    return { statusCode: 500, headers, body: JSON.stringify({ error: "Internal error" }) };
   }
 };
