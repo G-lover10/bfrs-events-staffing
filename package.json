@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "preflight": "node scripts/preflight.cjs",
+    "prebuild": "node scripts/preflight.cjs",
     "build": "vite build && node scripts/write-version.mjs",
     "preview": "vite preview"
   },
