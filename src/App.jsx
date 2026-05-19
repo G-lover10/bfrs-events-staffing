@@ -1239,7 +1239,15 @@ function CoordView({ profile, notify }) {
     await logActivity("denied_signup", "signup", signupId, { staffName: ac?.name, eventName: ev?.name });
     notify(`${ac?.name} denied for ${ev?.name}.`); refresh();
   };
-  const pendingSignups = signups.filter(s => s.status === "pending");
+  // Only count pending signups for events that haven't happened yet — past
+  // events don't need approval action and shouldn't pollute the count Chief
+  // uses to prioritize tomorrow's work. Past pending stay in DB (no data loss).
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const pendingSignups = signups.filter(s => {
+    if (s.status !== "pending") return false;
+    const ev = events.find(e => e.id === s.event_id);
+    return ev && ev.date && ev.date >= todayISO;
+  });
 
   // ── Cancel requests ──
   const approveCR = async (crId) => {
