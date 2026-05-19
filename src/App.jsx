@@ -1210,15 +1210,17 @@ function CoordView({ profile, notify }) {
       // sendNotification("overlap_alert", { staffName: ac?.name, eventDate: fmtDate(ev?.date), newEvent: ev?.name, existingEvent: c.name, existingTime: `${fmtTime(c.time_start)}–${fmtTime(c.time_end)}` });
       return;
     }
-    await supabase.from("signups").update({ status: "confirmed" }).eq("id", signupId);
+    const { error: apErr } = await supabase.from("signups").update({ status: "confirmed" }).eq("id", signupId);
+    if (apErr) { notify(`Approval failed for ${ac?.name}: ${apErr.message}. Try again.`, "error"); return; }
     await logActivity("approved_signup", "signup", signupId, { staffName: ac?.name, eventName: ev?.name });
     notify(`${ac?.name} approved for ${ev?.name}.`); refresh();
   };
   const denySignup = async (signupId) => {
     const su = signups.find(s => s.id === signupId);
-    await supabase.from("signups").update({ status: "denied" }).eq("id", signupId);
     const ac = profiles.find(p => p.id === su?.staff_id);
     const ev = events.find(e => e.id === su?.event_id);
+    const { error: dnErr } = await supabase.from("signups").update({ status: "denied" }).eq("id", signupId);
+    if (dnErr) { notify(`Deny failed for ${ac?.name}: ${dnErr.message}. Try again.`, "error"); return; }
     await logActivity("denied_signup", "signup", signupId, { staffName: ac?.name, eventName: ev?.name });
     notify(`${ac?.name} denied for ${ev?.name}.`); refresh();
   };
@@ -1228,10 +1230,12 @@ function CoordView({ profile, notify }) {
   const approveCR = async (crId) => {
     const cr = cancelReqs.find(c => c.id === crId);
     if (!cr) return;
-    await supabase.from("cancel_requests").update({ status: "approved" }).eq("id", crId);
-    await supabase.from("signups").delete().match({ staff_id: cr.staff_id, event_id: cr.event_id });
     const ac = profiles.find(p => p.id === cr.staff_id);
     const ev = events.find(e => e.id === cr.event_id);
+    const { error: crErr } = await supabase.from("cancel_requests").update({ status: "approved" }).eq("id", crId);
+    if (crErr) { notify(`Cancel approval failed: ${crErr.message}. Try again.`, "error"); return; }
+    const { error: delErr } = await supabase.from("signups").delete().match({ staff_id: cr.staff_id, event_id: cr.event_id });
+    if (delErr) { notify(`Cancel marked approved but staff signup not removed: ${delErr.message}. Manually remove from event.`, "error"); refresh(); return; }
     await logActivity("approved_cancel", "cancel_request", crId, { staffName: ac?.name, eventName: ev?.name });
     // Email muted May 18 2026 (Eric: no request or approval emails)
     // sendNotification("cancel_decision", { staffEmail: ac?.email, staffName: ac?.name, eventName: ev?.name, decision: "approved" });
@@ -1256,9 +1260,10 @@ function CoordView({ profile, notify }) {
   };
   const denyCR = async (crId) => {
     const cr = cancelReqs.find(c => c.id === crId);
-    await supabase.from("cancel_requests").update({ status: "denied" }).eq("id", crId);
     const ac = profiles.find(p => p.id === cr?.staff_id);
     const ev = events.find(e => e.id === cr?.event_id);
+    const { error: dnCRErr } = await supabase.from("cancel_requests").update({ status: "denied" }).eq("id", crId);
+    if (dnCRErr) { notify(`Cancel denial failed: ${dnCRErr.message}. Try again.`, "error"); return; }
     await logActivity("denied_cancel", "cancel_request", crId, { staffName: ac?.name, eventName: ev?.name });
     // Email muted May 18 2026 (Eric: no request or approval emails)
     // sendNotification("cancel_decision", { staffEmail: ac?.email, staffName: ac?.name, eventName: ev?.name, decision: "denied" });
