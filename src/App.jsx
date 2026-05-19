@@ -1107,8 +1107,9 @@ function CoordView({ profile, notify }) {
   };
   const denyAccount = async (id) => {
     const acc = profiles.find(p => p.id === id);
+    const { error } = await supabase.from("profiles").delete().eq("id", id);
+    if (error) { notify(`Failed to deny ${acc?.name}: ${error.message}. Try again.`, "error"); return; }
     await logActivity("denied_account", "profile", id, { name: acc?.name });
-    await supabase.from("profiles").delete().eq("id", id);
     notify("Account denied.", "error"); refresh();
   };
   const promoteToCoordinator = async (id) => {
@@ -1144,14 +1145,16 @@ function CoordView({ profile, notify }) {
 
   const deleteEvent = async (id) => {
     const ev = events.find(e => e.id === id);
+    const { error } = await supabase.from("events").delete().eq("id", id);
+    if (error) { notify(`Failed to delete event: ${error.message}. Try again.`, "error"); return; }
     await logActivity("deleted_event", "event", id, { name: ev?.name });
-    await supabase.from("events").delete().eq("id", id);
     notify("Event deleted."); refresh();
   };
 
   const updateEventStatus = async (id, status) => {
     const ev = events.find(e => e.id === id);
-    await supabase.from("events").update({ status }).eq("id", id);
+    const { error } = await supabase.from("events").update({ status }).eq("id", id);
+    if (error) { notify(`Failed to update status: ${error.message}. Try again.`, "error"); return; }
     await logActivity("changed_event_status", "event", id, { name: ev?.name, status });
     notify(`Event marked as ${status}.`); refresh();
   };
@@ -1185,8 +1188,9 @@ function CoordView({ profile, notify }) {
     notify("Clocked out!"); refresh();
   };
   const coordRemoveSignup = async (staffId, eventId) => {
-    await supabase.from("signups").delete().match({ staff_id: staffId, event_id: eventId });
     const ac = profiles.find(p => p.id === staffId);
+    const { error } = await supabase.from("signups").delete().match({ staff_id: staffId, event_id: eventId });
+    if (error) { notify(`Failed to remove ${ac?.name}: ${error.message}. Try again.`, "error"); return; }
     await logActivity("removed_signup", "signup", eventId, { staffName: ac?.name });
     notify("Signup removed."); refresh();
   };
@@ -2231,7 +2235,8 @@ function StaffView({ profile, notify, openHelpChat }) {
 
     // Pending → just withdraw
     if (mySU.status === "pending") {
-      await supabase.from("signups").delete().eq("id", mySU.id);
+      const { error } = await supabase.from("signups").delete().eq("id", mySU.id);
+      if (error) { notify(`Failed to withdraw: ${error.message}. Try again.`, "error"); return; }
       await logActivity("withdrew_signup", "signup", eventId, { eventName: ev?.name });
       notify("Signup withdrawn."); refresh(); return;
     }
@@ -2239,7 +2244,8 @@ function StaffView({ profile, notify, openHelpChat }) {
     // Confirmed → always requires coordinator approval
     const existingCR = myCR.find(c => c.event_id === eventId && c.status === "pending");
     if (existingCR) { notify("Withdrawal request already pending — awaiting coordinator approval.", "warn"); return; }
-    await supabase.from("cancel_requests").insert({ staff_id: profile.id, event_id: eventId, status: "pending", requested_at: nowISO() });
+    const { error } = await supabase.from("cancel_requests").insert({ staff_id: profile.id, event_id: eventId, status: "pending", requested_at: nowISO() });
+    if (error) { notify(`Failed to request withdrawal: ${error.message}. Try again.`, "error"); return; }
     await logActivity("requested_cancel", "cancel_request", eventId, { eventName: ev?.name });
     // Email muted May 18 2026 (Eric: no request or approval emails)
     // sendNotification("cancel_request", { staffName: profile.name, eventName: ev?.name });
