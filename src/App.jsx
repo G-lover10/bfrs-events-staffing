@@ -867,17 +867,29 @@ function useData() {
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
-    // Explicit .limit() overrides Supabase's PostgREST default max-rows (1000).
-    // signups can exceed 1000 across all staff; without this, the newest rows
-    // silently drop out of every client.
+    // Pagination helper — bypasses Supabase's PostgREST db-max-rows cap (default 1000)
+    // by looping range() requests. Returns { data: full, error } in the same shape as a
+    // single supabase call, so the rest of refresh() doesn't need to change.
+    const fetchAll = async (builder) => {
+      let all = [];
+      const page = 1000;
+      for (let from = 0; from < 100000; from += page) {
+        const { data, error } = await builder().range(from, from + page - 1);
+        if (error) return { data: null, error };
+        if (!data || data.length === 0) break;
+        all = all.concat(data);
+        if (data.length < page) break;
+      }
+      return { data: all, error: null };
+    };
     const [pR, eR, sR, aR, cR, lR, fR] = await Promise.all([
-      supabase.from("profiles").select("*").order("name").limit(10000),
-      supabase.from("events").select("*").order("date").limit(10000),
-      supabase.from("signups").select("*").limit(50000),
-      supabase.from("attendance").select("*").limit(20000),
-      supabase.from("cancel_requests").select("*").order("requested_at", { ascending: false }).limit(10000),
+      fetchAll(() => supabase.from("profiles").select("*").order("name")),
+      fetchAll(() => supabase.from("events").select("*").order("date")),
+      fetchAll(() => supabase.from("signups").select("*")),
+      fetchAll(() => supabase.from("attendance").select("*")),
+      fetchAll(() => supabase.from("cancel_requests").select("*").order("requested_at", { ascending: false })),
       supabase.from("activity_log").select("*").order("created_at", { ascending: false }).limit(200),
-      supabase.from("feedback").select("*").order("created_at", { ascending: false }).limit(2000),
+      fetchAll(() => supabase.from("feedback").select("*").order("created_at", { ascending: false })),
     ]);
     if (pR.data) setProfiles(pR.data);
     if (eR.data) setEvents(eR.data);
