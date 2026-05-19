@@ -401,69 +401,122 @@ Assess this feedback and respond in JSON only (no markdown):
 
 "worthy" means it deserves attention from the coordinator/developer. Mark noise, spam, or vague complaints as false.`;
 
-const HELP_SYSTEM_PROMPT = `You are a helpful assistant for the BFRS Special Events Staffing app used by Birmingham Fire & Rescue Service in Alabama. Your job is to help coordinators and staff understand how to use the app. Be friendly, clear, and concise.
+const APP_BASICS = `You are a helpful assistant for the BFRS Special Events Staffing app used by Birmingham Fire & Rescue Service in Alabama. Be friendly, clear, concise.
 
-Here is how the app works:
+SHIFT SYSTEM:
+- Suppression / EMS staff work 24 hours on / 48 hours off on three rotating shifts: A → B → C.
+- "Days" is a fourth option for administrative folks (e.g., Chief Hendon) who work Monday–Friday business hours. Days staff do NOT have Kelly days.
+- For A/B/C staff: every 9th shift is a Kelly Day off. Each user has a Kelly number (1–9) set at registration.
+- The app detects which shift is working on any event date and warns the user if they're trying to sign up while on regular duty or on their Kelly day.
+- IMPORTANT EXCEPTION: if a Kelly day would fall on a payday Friday, that Kelly day is canceled. The staff member must work their regular shift; their only way off is to use vacation time. The BFRS calendar marks these as "No Off Day" with a "$" symbol.
 
-ROLES:
-- Staff (EMT or Paramedic): Can sign up for events, view their status, clock in/out, and submit withdrawal requests.
-- Coordinator: Full access — create/manage events, approve or deny staff signups, manage accounts, view attendance, export reports, and see all pending actions on the dashboard.
+EVENTS — basics everyone sees:
+- Each event has a name, date, start/end time, venue, location, and counts for Paramedics and EMTs needed.
+- Status badges: OPEN (accepting signups), FULL (all slots filled), CLOSED, CANCELLED.
+- Signing up sends a PENDING request — a coordinator must approve before it's CONFIRMED.
 
-REGISTRATION & LOGIN:
-- New staff register with their name, email, shift (A/B/C/Days), level (EMT or Paramedic), phone number, and Kelly Day number (1-9, ask your supervisor).
-- After registering, accounts are PENDING until a coordinator approves them in the Staff tab.
-- Once approved, staff can log in and use the app.
+PAY PERIODS:
+- BFRS uses biweekly pay periods (14 days), with a 14-day lag before payday.
+- An event worked anywhere in a pay period is paid on the Friday that is 14 days AFTER the period ends.
+- Example: a period ending Fri Jun 26 pays out on Fri Jul 10. Events near the START of a period feel like a long wait (~24 days) — that's normal, not a bug.
 
-EVENTS:
-- Coordinators create events with a name, date, start/end time, location, and how many Paramedics and EMTs are needed.
-- Events have statuses: Open (accepting signups), Closed, or Cancelled.
-- Staff browse open events and tap "Sign Up" to request a spot.
+GENERAL UI EVERYONE SEES:
+- Theme toggle (☀️/🌙 top right) switches dark/light mode.
+- "🔄 New version available — tap to refresh" blue banner appears at the top when a new deploy lands. Tap it to reload to the latest version.
+- The app uses realtime sync — when something changes in the database, all users' views auto-update within ~1 second.
+- Bottom-left floating buttons: 🤖 (this Help Chat) and 💬 (Feedback — goes to Chief Hendon).
+- Successful actions show green toast confirmations; errors show in red with a specific reason ("Failed to X: <error>. Try again.").
 
-SIGNING UP FOR EVENTS:
-- Signing up sends a pending request — it is NOT guaranteed. A coordinator must approve it.
-- Staff can sign up for multiple events even on the same day. The app will warn about shift conflicts but allows it — the coordinator decides who gets assigned.
-- If you are on regular duty that day, the app shows a warning so you are aware.
-- Kelly Day warnings also appear if the event falls on your Kelly day.
+If you don't know something specific about their situation, tell them to ask their coordinator directly. If they ask about ideas or improvements, let them know it'll be forwarded to Chief Clay Hendon who oversees special events.`;
 
-COORDINATOR APPROVAL WORKFLOW:
-- Coordinators open an event and tap "Manage" to see all pending signups.
-- The app RECOMMENDS who to approve using a star (⭐) system based on: credential match, not on regular duty, fewest events that month, and signup time.
-- Stars are suggestions only — coordinators make the final call.
-- IMPORTANT: If a staff member is already confirmed for an overlapping event on the same day, the app will BLOCK approval and show an error. This prevents double-booking.
+const HELP_SYSTEM_PROMPT_STAFF = APP_BASICS + `
 
-WITHDRAWAL REQUESTS:
-- If a confirmed staff member needs to cancel, they tap "Cancel" on the event. This sends a withdrawal request — it does NOT immediately remove them.
-- The coordinator sees the request in the Cancel Reqs tab and must approve or deny it.
-- If approved, the slot opens back up for other staff.
-- Staff see a "⏳ Withdrawal Pending" badge while waiting.
+YOU ARE TALKING TO A STAFF MEMBER (EMT or Paramedic).
 
-ATTENDANCE (CLOCK IN/OUT):
-- On event day, confirmed staff tap "Clock In" when they arrive and "Clock Out" when they leave.
-- Hours are tracked automatically and shown in the leaderboard on the dashboard.
+REGISTRATION & ACCESS:
+- New staff register with name, email, shift (A/B/C or Days), level (EMT/EMT Advanced/Paramedic), phone, and Kelly number (only A/B/C shift staff fill this in — Days shift skips it).
+- Accounts are PENDING until a coordinator approves them in the Staff tab.
 
-DASHBOARD (Coordinators only):
-- Shows pending accounts, pending signups, and withdrawal requests as clickable cards.
-- Tap any pending card to jump directly to that section.
-- The Pending Actions panel lists every item needing attention with a Review button.
+DASHBOARD (where staff land):
+- Stat tiles: Events you can sign up for, Pending (your pending signups), Approved (your confirmed events), My Hours, My Profile.
 
-KELLY DAYS:
-- Every 9 shifts (27 days), staff get a Kelly day off.
-- Each staff member has a Kelly number (1-9) set during registration.
-- If an event falls on your Kelly day, the app shows a warning.
-- Exception: If a Kelly day falls on a payday Friday, that Kelly day is skipped.
+EVENTS TAB:
+- Lists events you can sign up for. The app hides events that are full or cancelled, UNLESS you already signed up for them or there's an open slot alert.
+- Tap "Sign Up" on an event to request a spot. Status becomes "⏳ Pending Approval".
+- You can sign up for overlapping events — the coordinator decides who gets each one. Warnings show for on-duty/Kelly day conflicts but the app does NOT block staff signups.
+- Time TBA events: if start/end time is TBA, you can tap "Update Time" to fill it in once you know.
 
-SHIFT ROTATION:
-- Birmingham Fire & Rescue works 24 hours on, 48 hours off.
-- Shifts rotate A → B → C.
-- The app detects which shift is working on any event date and warns staff accordingly.
+MY EVENTS (N) TAB:
+- All events you signed up for (pending + confirmed). Confirmed cards show in green; pending in orange.
 
-FEEDBACK:
-- Use the 💬 Feedback button (bottom left) to report bugs, suggest ideas, or leave comments.
-- All feedback is reviewed and sent to Chief Hendon.
+CLOCK IN / CLOCK OUT (on event day):
+- Your confirmed event card shows a green "Clock In" button. Tap it when you arrive.
+- After clock-in the button becomes "Clock Out". Tap when you leave. Hours auto-calculate.
 
-If someone asks about ideas or improvements, let them know their suggestion will be forwarded to Chief Clay Hendon who oversees special events, and that all ideas are appreciated and taken seriously.
+WITHDRAWING FROM A CONFIRMED EVENT:
+- If you can't make a confirmed event, tap "Cancel" on it. This sends a WITHDRAWAL REQUEST — you are NOT removed immediately.
+- A "⏳ Withdrawal Pending" badge shows while waiting. The coordinator approves or denies in their Cancel Reqs tab.
+- If approved, your slot opens back up and eligible staff get an open-slot alert.
 
-If you don't know something specific about their situation, encourage them to reach out to their coordinator directly.`;
+MY HOURS TAB:
+- Pay-period view anchored on May 1, 2026 (28-day calendar cycles).
+- Each pay period card shows scheduled hours vs worked hours. Tap a card to expand and see individual events.
+
+CANCEL REQS TAB:
+- Shows the status of withdrawal requests you've submitted.
+
+MY PROFILE TAB:
+- View and edit your name, email, phone, level, shift, Kelly number (if A/B/C shift). Change password via a separate modal.
+
+OPEN SLOT ALERTS:
+- When a confirmed staff member's withdrawal is approved, eligible staff (off duty, right credential, no overlap) get an in-app badge + email so they can grab the open spot.`;
+
+const HELP_SYSTEM_PROMPT_COORD = APP_BASICS + `
+
+YOU ARE TALKING TO A COORDINATOR (full access).
+
+DASHBOARD (where coordinators land):
+- Clickable stat cards: Events, Active Staff, Pending Accts, Pending Signups, Withdrawals, Total Hrs. Tap any card to jump to that section.
+- "Pending Actions" panel lists every item that needs attention (account approvals, signup approvals, cancel requests) with a "Review →" button on each.
+
+EVENTS TAB — creating and managing:
+- "Create Event" form at top: name, date, start/end time, venue, location, notes, needed Paramedics, needed EMTs.
+- Each event card shows at-a-glance status: ✅ X/Y medics, ✅ X/Y EMTs (green when filled, orange ⏳ when still needed), plus "⏳ N awaiting decision" if pending signups exist.
+
+MANAGE SECTION (tap "Manage" on any event):
+- "⏳ Awaiting Decision (N)" — pending signups with full detail (name, level, shift, monthly count, conflicts).
+- ⭐ Star recommendations suggest who to approve based on: credential match → off-duty → Kelly Day off → earliest signup time. The ⭐ is a suggestion only.
+- Approve/Deny buttons on each row.
+- HARD BLOCK: if a staff member is already confirmed for an overlapping event same day, approval is blocked with an error toast — prevents double-booking.
+- "📧 Outlook Invite Ready" banner once any staff are approved — tap "📅 Open Outlook Invite" to open Outlook pre-filled with event details and all approved staff emails. You just hit Send in Outlook.
+- "Approved Staff" list with Clock In / Clock Out / Remove buttons per row.
+- "➕ Add Staff Manually" section: pick a staff member from the dropdown and tap Add — they're immediately CONFIRMED (no pending step). Use when Chief tells you someone is working but didn't sign up via the app. Dropdown also includes pending-account staff suffixed "⏳ pending account".
+
+CANCEL REQS TAB:
+- Pending withdrawal requests from confirmed staff. Approve = remove staff + reopen slot + trigger open-slot alert to eligible staff. Deny = staff stays confirmed.
+
+STAFF TAB:
+- "Pending Approval (N)" — new accounts awaiting your approval. Has "Approve All" bulk button.
+- "Active Staff" table with Promote (to coordinator) / Demote (to staff) buttons.
+
+ATTENDANCE TAB:
+- All clock-in / clock-out records. Export to CSV.
+
+HEALTH TAB:
+- Data sanity checks the app runs to surface bad data: duplicate signups, events missing time or venue, signups for deleted events, etc. Look here periodically to catch problems.
+
+IMPORT TAB:
+- Bulk-import events from a CSV file.
+
+ACTIVITY LOG TAB:
+- Audit trail of every coordinator action (approvals, denials, edits, removes, deletes). Filterable.
+
+VIEW AS STAFF (toggle, top right):
+- Preview what a staff member sees. Useful for sanity-checking the staff flow before announcing changes.`;
+
+function helpPromptFor(role) {
+  return role === "coordinator" ? HELP_SYSTEM_PROMPT_COORD : HELP_SYSTEM_PROMPT_STAFF;
+}
 
 function FeedbackModal({ onClose, notify, userId, userName }) {
   const [type, setType] = useState("idea");
@@ -542,7 +595,7 @@ function FeedbackModal({ onClose, notify, userId, userName }) {
   );
 }
 
-function HelpChat({ onClose }) {
+function HelpChat({ onClose, role }) {
   const [messages, setMessages] = useState([{ role: "bot", text: "Hi! I'm the BFRS App Assistant. Ask me anything about how the app works — signing up for events, approvals, Kelly days, attendance, or anything else." }]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -570,7 +623,7 @@ function HelpChat({ onClose }) {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${helpSession.access_token}`,
         },
-        body: JSON.stringify({ system: HELP_SYSTEM_PROMPT, messages: [...history, { role: "user", content: q }] })
+        body: JSON.stringify({ system: helpPromptFor(role), messages: [...history, { role: "user", content: q }] })
       });
       const rawText = await res.text();
       let data;
@@ -748,7 +801,7 @@ export default function App() {
             </div>
             {showPwModal && <ChangePassword onClose={() => setShowPwModal(false)} notify={notify} />}
             {showFbModal && <FeedbackModal onClose={() => setShowFbModal(false)} notify={notify} userId={profile.id} userName={profile.name} />}
-            {showHelpChat && <HelpChat onClose={() => setShowHelpChat(false)} />}
+            {showHelpChat && <HelpChat onClose={() => setShowHelpChat(false)} role={profile.role} />}
             {!fabHidden && (
               <div className="fab-group">
                 <button className="fab-close" onClick={() => setFabHidden(true)} title="Hide help/feedback buttons">×</button>
@@ -867,7 +920,11 @@ function Auth({ onLogin, notify, theme, toggleTheme }) {
           <div className="fg"><label className="fl">Shift</label><select className="sel" value={reg.shift} onChange={e => setReg(p => ({ ...p, shift: e.target.value }))}><option>A</option><option>B</option><option>C</option><option>Days</option></select></div>
         </div>
         <div className="fg"><label className="fl">Phone</label><input className="fi" type="tel" value={reg.phone} onChange={e => setReg(p => ({ ...p, phone: e.target.value }))} /></div>
-        <div className="fg"><label className="fl">Kelly Day # <span style={{fontSize:10,color:"var(--t2)"}}>(1–9, ask your supervisor)</span></label><select className="sel" value={reg.kelly_number} onChange={e => setReg(p => ({ ...p, kelly_number: e.target.value }))}><option value="">— Select —</option>{[1,2,3,4,5,6,7,8,9].map(n => <option key={n} value={n}>{n}</option>)}</select></div>
+        {reg.shift === "Days" ? (
+          <div className="fg" style={{fontSize:11,color:"var(--t2)",padding:"6px 10px",background:"rgba(0,212,255,.06)",border:"1px solid rgba(0,212,255,.2)",borderRadius:6}}>ℹ️ Days shift doesn't have Kelly days, so no Kelly number is needed.</div>
+        ) : (
+          <div className="fg"><label className="fl">Kelly Day # <span style={{fontSize:10,color:"var(--t2)"}}>(1–9, ask your supervisor)</span></label><select className="sel" value={reg.kelly_number} onChange={e => setReg(p => ({ ...p, kelly_number: e.target.value }))}><option value="">— Select —</option>{[1,2,3,4,5,6,7,8,9].map(n => <option key={n} value={n}>{n}</option>)}</select></div>
+        )}
         <button className="bt bta" style={{ width: "100%", marginTop: 6 }} onClick={register} disabled={busy}>{busy ? "Registering..." : "Register"}</button>
       </>)}
     </div></div>
@@ -2035,7 +2092,7 @@ function MyProfileTab({ profile, notify, refresh }) {
         <div>📧 {profile.email}</div>
         <div>📞 {profile.phone||<span style={{color:"var(--o)"}}>No phone set</span>}</div>
         <div>🚒 {profile.level||<span style={{color:"var(--o)"}}>No level</span>} · Shift {profile.shift||<span style={{color:"var(--o)"}}>?</span>}</div>
-        <div>📅 Kelly Day #: {profile.kelly_number||<span style={{color:"var(--o)"}}>Not set — ask your supervisor</span>}</div>
+        <div>📅 Kelly Day #: {profile.shift === "Days" ? <span style={{color:"var(--t2)"}}>N/A (Days shift)</span> : (profile.kelly_number||<span style={{color:"var(--o)"}}>Not set — ask your supervisor</span>)}</div>
         {(() => {
           if (!profile.kelly_number || !profile.shift || profile.shift === "Days") return null;
           const today = new Date(); today.setHours(0,0,0,0);
@@ -2088,13 +2145,17 @@ function MyProfileTab({ profile, notify, refresh }) {
             <option value="Days">Days</option>
           </select>
         </div>
-        <div>
-          <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:4}}>Kelly Day # <span style={{opacity:.6}}>(1–9)</span></label>
-          <select className="fi" value={staffEditProf.kelly_number} onChange={e=>setStaffEditProf(p=>({...p,kelly_number:e.target.value}))} style={{fontSize:13}}>
-            <option value="">— Select —</option>
-            {[1,2,3,4,5,6,7,8,9].map(n=><option key={n} value={n}>{n}</option>)}
-          </select>
-        </div>
+        {staffEditProf.shift === "Days" ? (
+          <div style={{fontSize:11,color:"var(--t2)",alignSelf:"end",padding:"6px 10px",background:"rgba(0,212,255,.06)",border:"1px solid rgba(0,212,255,.2)",borderRadius:6}}>ℹ️ Days shift has no Kelly days.</div>
+        ) : (
+          <div>
+            <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:4}}>Kelly Day # <span style={{opacity:.6}}>(1–9)</span></label>
+            <select className="fi" value={staffEditProf.kelly_number} onChange={e=>setStaffEditProf(p=>({...p,kelly_number:e.target.value}))} style={{fontSize:13}}>
+              <option value="">— Select —</option>
+              {[1,2,3,4,5,6,7,8,9].map(n=><option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+        )}
         <div style={{gridColumn:"1/-1",display:"flex",alignItems:"center",gap:8,padding:"4px 0"}}>
           <input type="checkbox" id="avail-cb" checked={staffEditProf.availability === "available"} onChange={e=>setStaffEditProf(p=>({...p,availability: e.target.checked ? "available" : "unavailable"}))} style={{cursor:"pointer",width:16,height:16}} />
           <label htmlFor="avail-cb" style={{fontSize:12,cursor:"pointer"}}>I'm available to work special events</label>
