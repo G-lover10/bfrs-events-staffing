@@ -1516,6 +1516,25 @@ function CoordView({ profile, notify }) {
                 <div>
                   <div className="evn">{ev.name} <StatusBadge status={ev.status} /></div>
                   <div className="evm">{fmtDate(ev.date)} · {fmtTime(ev.time_start)} – {fmtTime(ev.time_end)} · <span className="sts" style={{background:"rgba(167,139,250,.2)",color:"var(--p)"}}>Shift {getShiftForDate(ev.date)}</span> · <span style={{fontSize:11,opacity:.85}}>💰 Pays {fmtDate(getPaydayForDate(ev.date))}</span></div>
+                  {(ev.needed_paramedics > 0 || ev.needed_emts > 0 || pendEv.length > 0) && (
+                    <div className="evm" style={{display:"flex",gap:10,flexWrap:"wrap",fontSize:12,marginTop:4,fontWeight:500}}>
+                      {ev.needed_paramedics > 0 && (
+                        <span style={{color: pc >= ev.needed_paramedics ? "var(--g)" : "var(--o)"}}>
+                          {pc >= ev.needed_paramedics ? "✅" : "⏳"} {pc}/{ev.needed_paramedics} medics
+                        </span>
+                      )}
+                      {ev.needed_emts > 0 && (
+                        <span style={{color: ec >= ev.needed_emts ? "var(--g)" : "var(--o)"}}>
+                          {ec >= ev.needed_emts ? "✅" : "⏳"} {ec}/{ev.needed_emts} EMT
+                        </span>
+                      )}
+                      {pendEv.length > 0 && (
+                        <span style={{color: "var(--y)"}}>
+                          ⏳ {pendEv.length} awaiting decision
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {(ev.venue || ev.location) && <div className="loc">
                     {ev.venue && <span style={{ fontWeight: 500, color: "var(--t)" }}>{ev.venue}</span>}
                     {ev.venue && ev.location && " · "}
@@ -1573,7 +1592,7 @@ function CoordView({ profile, notify }) {
                     });
                     return (
                     <div className="pend-section">
-                      <div className="sct" style={{ color: "var(--o)" }}>⏳ Pending Approval ({pendEv.length})</div>
+                      <div className="sct" style={{ color: "var(--o)" }}>⏳ Awaiting Decision ({pendEv.length})</div>
                       <div style={{ fontSize: 10, color: "var(--t2)", marginBottom: 8 }}>Sorted: Paramedic → EMT Advanced → EMT Basic. Within each group: off-duty ranks higher, Kelly Day off ranks higher, then earliest signup time wins.</div>
                       {sorted.map(s => {
                         const ac = profiles.find(p => p.id === s.staff_id); if (!ac) return null;
