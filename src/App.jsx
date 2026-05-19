@@ -1620,7 +1620,6 @@ function CoordView({ profile, notify }) {
                     </div>
                     );
                   })()}
-                  )}
                   <div className="dv" /><div className="sct">Approved Staff ({es.length})</div>
                   {es.length > 0 && (() => {
                     const approvedStaff = es.map(s => profiles.find(p => p.id === s.staff_id)).filter(Boolean);
