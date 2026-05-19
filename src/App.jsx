@@ -1079,6 +1079,8 @@ function CoordView({ profile, notify }) {
   const [previewEvs, setPreviewEvs] = useState(null);
   const [editingAttId, setEditingAttId] = useState(null);
   const [editAttTimes, setEditAttTimes] = useState({clockIn:"", clockOut:""});
+  const [showPastLog, setShowPastLog] = useState(false);
+  const [showPastEvents, setShowPastEvents] = useState(false);
 
   const pendingAccounts = profiles.filter(p => !p.approved && p.role === "staff");
   const pendingCR = cancelReqs.filter(c => c.status === "pending");
@@ -1481,7 +1483,11 @@ function CoordView({ profile, notify }) {
         <button className="bt bta" onClick={createEvent}>Create Event</button>
       </div>
 
-      {events.map(ev => {
+      {(() => {
+        const todayIso = new Date().toISOString().slice(0, 10);
+        const upcomingEvs = events.filter(e => e.date >= todayIso).sort((a, b) => a.date.localeCompare(b.date));
+        const pastEvs = events.filter(e => e.date < todayIso).sort((a, b) => b.date.localeCompare(a.date));
+        const renderEv = ev => {
         const es = signups.filter(s => s.event_id === ev.id && s.status === "confirmed");
         const pendEv = signups.filter(s => s.event_id === ev.id && s.status === "pending");
         const pc = es.filter(s => { const p = profiles.find(x => x.id === s.staff_id); return p?.level === "Paramedic"; }).length;
@@ -1620,7 +1626,6 @@ function CoordView({ profile, notify }) {
                     </div>
                     );
                   })()}
-                  )}
                   <div className="dv" /><div className="sct">Approved Staff ({es.length})</div>
                   {es.length > 0 && (() => {
                     const approvedStaff = es.map(s => profiles.find(p => p.id === s.staff_id)).filter(Boolean);
@@ -1689,7 +1694,17 @@ function CoordView({ profile, notify }) {
             </>)}
           </div>
         );
-      })}
+        };
+        return (<>
+          {upcomingEvs.map(renderEv)}
+          {pastEvs.length > 0 && (<>
+            <div className="sct" style={{cursor:"pointer"}} onClick={() => setShowPastEvents(v => !v)}>
+              {showPastEvents ? "▼" : "▶"} Past Events ({pastEvs.length})
+            </div>
+            {showPastEvents && pastEvs.map(renderEv)}
+          </>)}
+        </>);
+      })()}
     </>}
 
     {/* ── STAFF TAB ── */}
@@ -1844,30 +1859,46 @@ function CoordView({ profile, notify }) {
     </>}
 
     {/* ── ACTIVITY LOG ── */}
-    {tab === "log" && <>
-      <div className="sct">Activity Log (Last 200)</div>
-      <div className="cd">
-        {activityLog.length === 0 && <div style={{ color: "var(--t2)", fontSize: 12, padding: 10 }}>No activity recorded yet.</div>}
-        {activityLog.map(l => {
-          const actor = profiles.find(p => p.id === l.actor_id);
-          return (
-            <div className="alr" key={l.id}>
-              <div className="alt">{fmtFull(l.created_at)}</div>
-              <div>
-                <div className="ala">
-                  <span style={{ color: "var(--a)" }}>{actor?.name || "System"}</span>
-                  {" "}<span style={{ color: "var(--t2)" }}>{l.action.replace(/_/g, " ")}</span>
-                  {" "}<span style={{ color: "var(--t2)", fontSize: 10 }}>({l.target_type})</span>
-                </div>
-                {l.details && Object.keys(l.details).length > 0 && (
-                  <div className="ald">{Object.entries(l.details).map(([k, v]) => `${k}: ${v}`).join(" · ")}</div>
-                )}
+    {tab === "log" && (() => {
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const recentLogs = activityLog.filter(l => l.created_at >= thirtyDaysAgo);
+      const pastLogs = activityLog.filter(l => l.created_at < thirtyDaysAgo);
+      const renderLog = (l) => {
+        const actor = profiles.find(p => p.id === l.actor_id);
+        return (
+          <div className="alr" key={l.id}>
+            <div className="alt">{fmtFull(l.created_at)}</div>
+            <div>
+              <div className="ala">
+                <span style={{ color: "var(--a)" }}>{actor?.name || "System"}</span>
+                {" "}<span style={{ color: "var(--t2)" }}>{l.action.replace(/_/g, " ")}</span>
+                {" "}<span style={{ color: "var(--t2)", fontSize: 10 }}>({l.target_type})</span>
               </div>
+              {l.details && Object.keys(l.details).length > 0 && (
+                <div className="ald">{Object.entries(l.details).map(([k, v]) => `${k}: ${v}`).join(" · ")}</div>
+              )}
             </div>
-          );
-        })}
-      </div>
-    </>}
+          </div>
+        );
+      };
+      return (<>
+        <div className="sct">Activity Log — Recent (30 days)</div>
+        <div className="cd">
+          {recentLogs.length === 0 && <div style={{ color: "var(--t2)", fontSize: 12, padding: 10 }}>No recent activity.</div>}
+          {recentLogs.map(renderLog)}
+        </div>
+        {pastLogs.length > 0 && (<>
+          <div className="sct" style={{cursor:"pointer"}} onClick={() => setShowPastLog(v => !v)}>
+            {showPastLog ? "▼" : "▶"} Past Activity ({pastLogs.length})
+          </div>
+          {showPastLog && (
+            <div className="cd">
+              {pastLogs.map(renderLog)}
+            </div>
+          )}
+        </>)}
+      </>);
+    })()}
 
     {/* ── HEALTH TAB ── */}
     {tab === "health" && <>
@@ -2327,7 +2358,7 @@ function StaffView({ profile, notify, openHelpChat }) {
               </div>
             </div>
             {ev.notes && <div className="nts">📋 {ev.notes}</div>}
-            {(() => { const evShift = getShiftForDate(ev.date); const offDay = NEXT_SHIFT[profile.shift]; const isKelly = isKellyDay(ev.date, profile.kelly_number, profile.shift); if (isKelly) return <div className="shift-warn" style={{borderColor:"rgba(74,222,128,.3)",color:"var(--g)"}}>🟢 This is your Kelly Day — you're off duty and available to work this event.</div>; if (evShift === profile.shift) return <div className="shift-warn">⚠️ Reminder: You will be on regular duty (Shift {profile.shift}) this day.</div>; if (evShift === offDay && ev.time_start < "08:00") return <div className="shift-warn">⚠️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts before 0800 — you may arrive late.</div>; if (evShift === offDay) return <div className="shift-warn" style={{borderColor:"rgba(0,212,255,.2)",color:"var(--a)"}}>ℹ️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts after your shift ends.</div>; return null; })()}
+            {(() => { const evShift = getShiftForDate(ev.date); const offDay = NEXT_SHIFT[profile.shift]; const isKelly = isKellyDay(ev.date, profile.kelly_number, profile.shift); if (isKelly) return <div className="shift-warn" style={{borderColor:"rgba(74,222,128,.3)",color:"var(--g)"}}>🟢 This is your Kelly Day — you're off duty and available to work this event.</div>; if (evShift === profile.shift) return <div className="shift-warn">⚠️ Reminder: You will be on regular duty (Shift {profile.shift}) this day.</div>; if (evShift === offDay && ev.time_start < "08:00") return <div className="shift-warn">⚠️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts before 0800 — you WILL arrive late.</div>; if (evShift === offDay) return <div className="shift-warn" style={{borderColor:"rgba(0,212,255,.2)",color:"var(--a)"}}>ℹ️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts after your shift ends.</div>; return null; })()}
             {hasConflict && !isMine && <div className="shift-warn">⚡ Overlaps with: {conflicts.map(c => c.name).join(", ")}. You can still sign up — coordinator will decide which event to assign you.</div>}
             {/* Slot bars hidden from staff view */}
             {myAttRec && (
@@ -2367,7 +2398,7 @@ function StaffView({ profile, notify, openHelpChat }) {
               </div>
             </div>
             {ev.notes && <div className="nts">📋 {ev.notes}</div>}
-            {(() => { const evShift = getShiftForDate(ev.date); const offDay = NEXT_SHIFT[profile.shift]; const isKelly = isKellyDay(ev.date, profile.kelly_number, profile.shift); if (isKelly) return <div className="shift-warn" style={{borderColor:"rgba(74,222,128,.3)",color:"var(--g)"}}>🟢 This is your Kelly Day — you're off duty and available to work this event.</div>; if (evShift === profile.shift) return <div className="shift-warn">⚠️ Reminder: You will be on regular duty (Shift {profile.shift}) this day.</div>; if (evShift === offDay && ev.time_start < "08:00") return <div className="shift-warn">⚠️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts before 0800 — you may arrive late.</div>; if (evShift === offDay) return <div className="shift-warn" style={{borderColor:"rgba(0,212,255,.2)",color:"var(--a)"}}>ℹ️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts after your shift ends.</div>; return null; })()}
+            {(() => { const evShift = getShiftForDate(ev.date); const offDay = NEXT_SHIFT[profile.shift]; const isKelly = isKellyDay(ev.date, profile.kelly_number, profile.shift); if (isKelly) return <div className="shift-warn" style={{borderColor:"rgba(74,222,128,.3)",color:"var(--g)"}}>🟢 This is your Kelly Day — you're off duty and available to work this event.</div>; if (evShift === profile.shift) return <div className="shift-warn">⚠️ Reminder: You will be on regular duty (Shift {profile.shift}) this day.</div>; if (evShift === offDay && ev.time_start < "08:00") return <div className="shift-warn">⚠️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts before 0800 — you WILL arrive late.</div>; if (evShift === offDay) return <div className="shift-warn" style={{borderColor:"rgba(0,212,255,.2)",color:"var(--a)"}}>ℹ️ You're getting off duty at 0800 (Shift {profile.shift}). Event starts after your shift ends.</div>; return null; })()}
             {myAttRec && (
               <div style={{ marginTop: 8, fontSize: 11, color: "var(--t2)", fontFamily: "'DM Mono', monospace" }}>
                 In: {fmtDateTime(myAttRec.sign_in_time)}{myAttRec.sign_out_time && ` · Out: ${fmtDateTime(myAttRec.sign_out_time)} · ${calcHours(myAttRec.sign_in_time, myAttRec.sign_out_time)} hrs`}
