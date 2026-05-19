@@ -867,14 +867,17 @@ function useData() {
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
+    // Explicit .limit() overrides Supabase's PostgREST default max-rows (1000).
+    // signups can exceed 1000 across all staff; without this, the newest rows
+    // silently drop out of every client.
     const [pR, eR, sR, aR, cR, lR, fR] = await Promise.all([
-      supabase.from("profiles").select("*").order("name"),
-      supabase.from("events").select("*").order("date"),
-      supabase.from("signups").select("*"),
-      supabase.from("attendance").select("*"),
-      supabase.from("cancel_requests").select("*").order("requested_at", { ascending: false }),
+      supabase.from("profiles").select("*").order("name").limit(10000),
+      supabase.from("events").select("*").order("date").limit(10000),
+      supabase.from("signups").select("*").limit(50000),
+      supabase.from("attendance").select("*").limit(20000),
+      supabase.from("cancel_requests").select("*").order("requested_at", { ascending: false }).limit(10000),
       supabase.from("activity_log").select("*").order("created_at", { ascending: false }).limit(200),
-      supabase.from("feedback").select("*").order("created_at", { ascending: false }),
+      supabase.from("feedback").select("*").order("created_at", { ascending: false }).limit(2000),
     ]);
     if (pR.data) setProfiles(pR.data);
     if (eR.data) setEvents(eR.data);
