@@ -12,14 +12,14 @@ try {
 }
 
 const checks = [
-  { name: "Staff: All Events / Dashboard tab", pattern: "{/* ── ALL EVENTS ── */}" },
-  { name: "Staff: My Events tab", pattern: ">My Events" },
-  { name: "Staff: My Hours tab", pattern: ">My Hours<" },
-  { name: "Staff: My Profile tab", pattern: ">My Profile<" },
-  { name: "Staff: Cancel Reqs tab", pattern: ">Cancel Reqs" },
-  { name: "Profile: Availability column", pattern: "availability" },
-  { name: "Profile: Note to coordinator column", pattern: "avail_note" },
-  { name: "Coord: Dashboard tab", pattern: ">Dashboard<" },
+  { name: "Staff: All Events / Dashboard tab", pattern: '{/* ── ALL EVENTS ── */}' },
+  { name: "Staff: My Events tab", pattern: 'setTab("my")' },
+  { name: "Staff: My Hours tab", pattern: 'setTab("hours")' },
+  { name: "Staff: My Profile tab", pattern: 'setTab("profile")' },
+  { name: "Staff: Cancel Reqs tab", pattern: 'setTab("cr")' },
+  { name: "Profile: Availability checkbox", pattern: 'id="avail-cb"' },
+  { name: "Profile: Note to coordinator save", pattern: 'avail_note' },
+  { name: "Coord: Dashboard tab", pattern: 'setTab("dash")' },
   { name: "Coord: Events tab", pattern: 'tab === "events"' },
   { name: "Coord: Staff tab", pattern: 'tab === "staff"' },
   { name: "Coord: Attendance tab", pattern: 'tab === "att"' },
@@ -27,7 +27,7 @@ const checks = [
   { name: "Coord: Health tab", pattern: 'tab === "health"' },
   { name: "Coord: Import tab", pattern: 'tab === "import"' },
   { name: "Coord: Feedback tab", pattern: 'tab === "fb"' },
-  { name: "Coord: Add Staff to event button", pattern: "Add Staff" },
+  { name: "Coord: Manually-add-staff handler", pattern: "manuallyAddStaff" },
   { name: "Coord: Past Events collapsible", pattern: "showPastEvents" },
   { name: "Coord: Activity Log Recent/Past split", pattern: "thirtyDaysAgo" },
   { name: "Coord: Past Activity toggle", pattern: "showPastLog" },
@@ -40,7 +40,13 @@ const checks = [
   { name: "Score signup function", pattern: "scoreSignup" },
   { name: "Version-update banner state", pattern: "newVersionAvailable" },
   { name: "Coordinator-as-staff toggle", pattern: "viewAsStaff" },
-  { name: "Import dedup (matches existing name+date)", pattern: "import" },
+  { name: "Excel import dedup (name+date key)", pattern: "existingKeys.has(key)" },
+  { name: "Conflict detection: findConflicts", pattern: "findConflicts" },
+  { name: "Conflict detection: findAllOverlaps", pattern: "findAllOverlaps" },
+  { name: "Hard block on overlap at approval", pattern: "Hard block — cannot approve" },
+  { name: "Send-email Netlify function call", pattern: "/.netlify/functions/send-email" },
+  { name: "Withdrawal approve handler (approveCR)", pattern: "approveCR" },
+  { name: "Withdrawal deny handler (denyCR)", pattern: "denyCR" },
 ];
 
 let failed = 0;
@@ -55,27 +61,9 @@ for (const c of checks) {
   }
 }
 
-const undefinedCalls = [];
-const definedNames = new Set();
-const defRe = /(?:const|let|var|function)\s+([a-zA-Z_$][\w$]*)\s*[=({]/g;
-let m;
-while ((m = defRe.exec(src)) !== null) definedNames.add(m[1]);
-
-const jsBuiltins = new Set([
-  "Array", "Boolean", "Date", "Error", "JSON", "Math", "Number", "Object",
-  "Promise", "RegExp", "Set", "String", "Map", "WeakMap", "WeakSet",
-  "parseInt", "parseFloat", "isNaN", "isFinite", "encodeURIComponent",
-  "decodeURIComponent", "fetch", "console", "window", "document", "alert",
-  "confirm", "prompt", "setTimeout", "setInterval", "clearTimeout",
-  "clearInterval", "URL", "URLSearchParams", "FormData", "FileReader",
-  "Blob", "Symbol", "Proxy", "Reflect", "useState", "useEffect", "useRef",
-  "useMemo", "useCallback", "useContext", "createContext", "Fragment",
-  "supabase", "React",
-]);
-
 console.log("");
 if (failed > 0) {
-  console.error(`\n❌ ${failed} of ${checks.length} preflight checks failed. Build aborted.`);
+  console.error(`❌ ${failed} of ${checks.length} preflight checks failed. Build aborted.`);
   process.exit(1);
 }
-console.log(`\n✅ All ${passed} preflight checks passed.`);
+console.log(`✅ All ${passed} preflight checks passed.`);
