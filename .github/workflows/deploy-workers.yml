@@ -1,0 +1,56 @@
+name: Deploy Workers
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'workers/**'
+      - '.github/workflows/deploy-workers.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: workers-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: workers/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: workers
+
+      - name: Deploy via wrangler
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers
+
+      - name: Smoke test keep-alive
+        env:
+          WORKER_URL: ${{ secrets.CLOUDFLARE_WORKER_URL }}
+        run: |
+          if [ -z "$WORKER_URL" ]; then
+            echo "CLOUDFLARE_WORKER_URL secret not set — skipping smoke test"
+            exit 0
+          fi
+          for i in 1 2 3 4 5; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${WORKER_URL}/keep-alive?key=bfrs-keepalive-2026" || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "Keep-alive returned 200 on attempt $i"
+              exit 0
+            fi
+            echo "Attempt $i returned $STATUS, retrying in 3s..."
+            sleep 3
+          done
+          echo "Keep-alive smoke test failed after 5 attempts"
+          exit 1
