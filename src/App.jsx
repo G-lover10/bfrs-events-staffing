@@ -1262,7 +1262,15 @@ function CoordView({ profile, notify }) {
     await logActivity("denied_signup", "signup", signupId, { staffName: ac?.name, eventName: ev?.name });
     notify(`${ac?.name} denied for ${ev?.name}.`); refresh();
   };
-  const pendingSignups = signups.filter(s => s.status === "pending");
+  // Scope to events today-or-later. Each new month's signup cycle rolls the
+  // badge over automatically — past-cycle pending stays in DB (no data loss)
+  // but stops counting toward the "needs decision" totals Chief sees.
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const pendingSignups = signups.filter(s => {
+    if (s.status !== "pending") return false;
+    const ev = events.find(e => e.id === s.event_id);
+    return ev && ev.date && ev.date >= todayISO;
+  });
 
   // ── Cancel requests ──
   const approveCR = async (crId) => {
