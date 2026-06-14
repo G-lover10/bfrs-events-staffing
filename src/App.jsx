@@ -649,11 +649,49 @@ function ChangePassword({ onClose, notify }) {
   );
 }
 
+// ─── RESET PASSWORD (recovery deep-link) ──────────────────────────────────────
+// Shown after a user clicks the "reset password" email link. Supabase has already
+// established a temporary recovery session, so updateUser() can set a new password
+// without the old one. On success we sign out and send them back to a clean login.
+function ResetPassword({ onDone, notify, theme, toggleTheme }) {
+  const [newP, setNewP] = useState("");
+  const [conf, setConf] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    setErr(""); setBusy(true);
+    if (!newP || !conf) { setErr("All fields required."); setBusy(false); return; }
+    if (newP !== conf) { setErr("Passwords do not match."); setBusy(false); return; }
+    if (newP.length < 6) { setErr("Min 6 characters."); setBusy(false); return; }
+    const { error } = await supabase.auth.updateUser({ password: newP });
+    setBusy(false);
+    if (error) { setErr(error.message); return; }
+    notify("Password updated — please sign in with your new password.");
+    onDone();
+  };
+
+  return (
+    <div className="lw"><div className="lc">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div className="ll" style={{ display: "flex", alignItems: "center", gap: 8 }}><img src={BADGE_SRC} alt="BFRS" style={{ height: 32, borderRadius: 4 }} />BFRS Events <span className="beta" style={{ fontSize: 10 }}>BETA {APP_VERSION}</span></div>
+        <button className="theme-btn" onClick={toggleTheme}>{theme === "dark" ? "☀️" : "🌙"}</button>
+      </div>
+      <div className="ls">Set a new password</div>
+      {err && <div className="err">{err}</div>}
+      <div className="fg"><label className="fl">New Password</label><input className="fi" type="password" value={newP} onChange={e => setNewP(e.target.value)} /></div>
+      <div className="fg"><label className="fl">Confirm New Password</label><input className="fi" type="password" value={conf} onChange={e => setConf(e.target.value)} onKeyDown={e => e.key === "Enter" && submit()} /></div>
+      <button className="bt bta" style={{ width: "100%", marginTop: 6 }} onClick={submit} disabled={busy}>{busy ? "Saving..." : "Update Password"}</button>
+    </div></div>
+  );
+}
+
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [recovery, setRecovery] = useState(false);
   const [notif, setNotif] = useState(null);
   const [showPwModal, setShowPwModal] = useState(false);
   const [showFbModal, setShowFbModal] = useState(false);
@@ -688,11 +726,25 @@ export default function App() {
   const notify = useCallback((msg, t = "ok") => { setNotif({ msg, t }); setTimeout(() => setNotif(null), 3200); }, []);
 
   useEffect(() => {
+    // If we loaded from a recovery deep link, flag it synchronously so getSession()
+    // below can't promote the temporary recovery session into the main app (which
+    // would flash the authenticated UI for a tick before PASSWORD_RECOVERY fires).
+    const isRecoveryUrl = (() => {
+      try { return new URLSearchParams(window.location.hash.slice(1)).get("type") === "recovery"; }
+      catch { return false; }
+    })();
+    if (isRecoveryUrl) setRecovery(true);
+
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
+      if (isRecoveryUrl) { setLoading(false); return; }
       if (s) loadProfile(s.user.id); else setLoading(false);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_ev, s) => {
+      // Password-recovery deep link: Supabase establishes a temporary session and
+      // fires PASSWORD_RECOVERY. Flag it so we show the "set new password" screen
+      // instead of dropping the user straight into the app.
+      if (_ev === "PASSWORD_RECOVERY") { setRecovery(true); setSession(s); setLoading(false); return; }
       setSession(s);
       if (s) loadProfile(s.user.id); else { setProfile(null); setLoading(false); }
     });
@@ -730,7 +782,14 @@ export default function App() {
   return (
     <><style>{css}</style>
       <div className="app">
-        {!session || !profile ? (
+        {recovery ? (
+          <ResetPassword notify={notify} theme={theme} toggleTheme={toggleTheme}
+            onDone={async () => {
+              await supabase.auth.signOut();
+              try { window.history.replaceState(null, "", window.location.pathname); } catch {}
+              setRecovery(false); setSession(null); setProfile(null);
+            }} />
+        ) : !session || !profile ? (
           <Auth onLogin={(s, p) => { setSession(s); setProfile(p); }} notify={notify} theme={theme} toggleTheme={toggleTheme} />
         ) : !profile.approved ? (
           <PendingScreen onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme} />
@@ -805,11 +864,26 @@ function Auth({ onLogin, notify, theme, toggleTheme }) {
   const [reg, setReg] = useState({ name: "", email: "", password: "", confirm: "", level: "EMT", shift: "A", phone: "", kelly_number: "" });
   const [rErr, setRErr] = useState("");
 
+  const [resetSent, setResetSent] = useState(false);
+
   const login = async () => {
     setErr(""); setBusy(true);
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: pass });
     setBusy(false);
     if (error) { setErr(error.message); return; }
+  };
+
+  const sendReset = async () => {
+    setErr(""); setResetSent(false);
+    if (!email.trim()) { setErr("Enter your email address first."); return; }
+    setBusy(true);
+    // redirectTo must be listed in Supabase Auth → URL Configuration (Site URL /
+    // additional redirect URLs) or the link in the email will be rejected.
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin });
+    setBusy(false);
+    // Always report success even on error, so we don't leak which emails are registered.
+    if (error) console.error("resetPasswordForEmail:", error);
+    setResetSent(true);
   };
 
   const register = async () => {
@@ -846,14 +920,17 @@ function Auth({ onLogin, notify, theme, toggleTheme }) {
       </div>
       <div className="ls">Special Events Staffing — Birmingham Fire &amp; Rescue</div>
       <div className="at">
-        <button className={`atb${v === "login" ? " on" : ""}`} onClick={() => { setV("login"); setErr(""); }}>Sign In</button>
-        <button className={`atb${v === "register" ? " on" : ""}`} onClick={() => { setV("register"); setRErr(""); }}>Register</button>
+        <button className={`atb${v === "login" ? " on" : ""}`} onClick={() => { setV("login"); setErr(""); setResetSent(false); }}>Sign In</button>
+        <button className={`atb${v === "register" ? " on" : ""}`} onClick={() => { setV("register"); setRErr(""); setResetSent(false); }}>Register</button>
       </div>
       {v === "login" ? (<>
         {err && <div className="err">{err}</div>}
         <div className="fg"><label className="fl">Email</label><input className="fi" type="email" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && login()} /></div>
         <div className="fg"><label className="fl">Password</label><input className="fi" type="password" value={pass} onChange={e => setPass(e.target.value)} onKeyDown={e => e.key === "Enter" && login()} /></div>
         <button className="bt bta" style={{ width: "100%", marginTop: 6 }} onClick={login} disabled={busy}>{busy ? "Signing in..." : "Sign In"}</button>
+        {resetSent
+          ? <div style={{ fontSize: 12, color: "var(--g)", textAlign: "center", marginTop: 10 }}>If an account exists for that email, a password-reset link is on its way. Check your inbox (and spam).</div>
+          : <button type="button" onClick={sendReset} disabled={busy} style={{ display: "block", margin: "10px auto 0", background: "none", border: "none", color: "var(--a)", fontSize: 12, cursor: "pointer", textDecoration: "underline" }}>Forgot password?</button>}
       </>) : (<>
         {rErr && <div className="err">{rErr}</div>}
         <div className="fg"><label className="fl">Full Name</label><input className="fi" value={reg.name} onChange={e => setReg(p => ({ ...p, name: e.target.value }))} /></div>
