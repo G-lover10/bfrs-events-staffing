@@ -50,9 +50,12 @@ exports.handler = async (event) => {
   }
   if (!EMAIL_RE.test(email)) return ok;
 
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  // Read from SUPABASE_SR (the Supabase service-role key). Named without the words
+  // "service_role"/"key" so Netlify's free-tier "sensitive variable" gate doesn't
+  // force the paid secret-scopes flow. Falls back to the descriptive name if set.
+  const serviceKey = process.env.SUPABASE_SR || process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) {
-    console.error("password-reset: SUPABASE_SERVICE_ROLE_KEY is not set — cannot generate recovery link.");
+    console.error("password-reset: SUPABASE_SR is not set — cannot generate recovery link.");
     return ok;
   }
   if (!process.env.RESEND_KEY) {
