@@ -877,12 +877,21 @@ function Auth({ onLogin, notify, theme, toggleTheme }) {
     setErr(""); setResetSent(false);
     if (!email.trim()) { setErr("Enter your email address first."); return; }
     setBusy(true);
-    // redirectTo must be listed in Supabase Auth → URL Configuration (Site URL /
-    // additional redirect URLs) or the link in the email will be rejected.
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin });
+    // Send the reset link via our own Netlify function (Supabase admin link +
+    // Resend delivery) rather than Supabase's unreliable built-in auth email.
+    // The link is still a real Supabase recovery link, so the PASSWORD_RECOVERY
+    // handler takes over when it's clicked.
+    try {
+      await fetch("/.netlify/functions/password-reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), redirectTo: window.location.origin }),
+      });
+    } catch (e) {
+      console.error("password-reset request:", e);
+    }
     setBusy(false);
-    // Always report success even on error, so we don't leak which emails are registered.
-    if (error) console.error("resetPasswordForEmail:", error);
+    // Always report success so we don't leak which emails are registered.
     setResetSent(true);
   };
 
