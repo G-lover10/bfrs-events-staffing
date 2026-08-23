@@ -1295,7 +1295,7 @@ function CoordView({ profile, notify }) {
   const coordSignIn = async (staffId, eventId) => {
     const exists = attendance.find(a => a.staff_id === staffId && a.event_id === eventId);
     if (exists) { notify("Already clocked in.", "error"); return; }
-    await supabase.from("attendance").insert({ staff_id: staffId, event_id: eventId, sign_in_time: nowISO() });
+    await supabase.from("attendance").insert({ staff_id: staffId, event_id: eventId, sign_in_time: nowISO(), original_event_id: eventId });
     const ac = profiles.find(p => p.id === staffId);
     await logActivity("clocked_in_staff", "attendance", eventId, { staffName: ac?.name });
     notify("Clocked in!"); refresh();
@@ -1329,7 +1329,13 @@ function CoordView({ profile, notify }) {
       const c = conflicts[0];
       if (!confirm(`${ac.name} is already confirmed for "${c.name}" (${fmtDate(c.date)} ${fmtTime(c.time_start)}–${fmtTime(c.time_end)}) which overlaps with this event.\n\nAdd anyway?`)) return;
     }
-    const { error } = await supabase.from("signups").insert({ staff_id: staffId, event_id: eventId, status: "confirmed", signed_up_at: nowISO() });
+    const { error } = await supabase.from("signups").insert({
+      staff_id: staffId, event_id: eventId, status: "confirmed", signed_up_at: nowISO(),
+      original_event_id: eventId,
+      snapshot_event_name: ev?.name || null,
+      snapshot_event_date: ev?.date || null,
+      snapshot_hours: eventHours(ev),
+    });
     if (error) { notify("Add error: " + error.message, "error"); return; }
     await logActivity("manually_added", "signup", eventId, { staffName: ac.name, eventName: ev?.name });
     notify(`${ac.name} added to ${ev?.name}.`);
@@ -2339,7 +2345,13 @@ function StaffView({ profile, notify, openHelpChat }) {
     if (mySignups.filter(s => s.status === "confirmed").length >= SOFT_LIMIT) { notify(`Soft limit of ${SOFT_LIMIT} approved events reached.`, "warn"); }
     // Check for overlapping approved events — warn but allow signup
     const conflicts = findConflicts(eventId, profile.id, events, signups);
-    const { error } = await supabase.from("signups").insert({ staff_id: profile.id, event_id: eventId, status: "pending", signed_up_at: nowISO() });
+    const { error } = await supabase.from("signups").insert({
+      staff_id: profile.id, event_id: eventId, status: "pending", signed_up_at: nowISO(),
+      original_event_id: eventId,
+      snapshot_event_name: ev?.name || null,
+      snapshot_event_date: ev?.date || null,
+      snapshot_hours: eventHours(ev),
+    });
     if (error) { notify(error.message, "error"); return; }
     await logActivity("signed_up", "signup", eventId, { eventName: ev?.name });
     // Email muted May 18 2026 (Eric: emails only for cancel-related events)
@@ -2379,7 +2391,7 @@ function StaffView({ profile, notify, openHelpChat }) {
 
   const signIn = async (eventId) => {
     const myApproved = mySignups.find(s => s.event_id === eventId && s.status === "confirmed"); if (!myApproved) { notify("Not approved yet.", "error"); return; } if (myAtt.find(a => a.event_id === eventId)) { notify("Already clocked in.", "error"); return; }
-    await supabase.from("attendance").insert({ staff_id: profile.id, event_id: eventId, sign_in_time: nowISO() });
+    await supabase.from("attendance").insert({ staff_id: profile.id, event_id: eventId, sign_in_time: nowISO(), original_event_id: eventId });
     const ev = events.find(e => e.id === eventId);
     await logActivity("clocked_in", "attendance", eventId, { eventName: ev?.name });
     notify("Clocked in!"); refresh();
