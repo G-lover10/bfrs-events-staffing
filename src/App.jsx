@@ -33,7 +33,22 @@ const NEXT_SHIFT = { A: "B", B: "C", C: "A" }; // A works → gets off 0800 on B
 // ─── TIME OVERLAP CHECKER ─────────────────────────────────────────────────────
 const timesOverlap = (date1, start1, end1, date2, start2, end2) => {
   if (date1 !== date2) return false;
+  // TBA times aren't real time strings — comparing them as text gives wrong answers.
+  // Treat any TBA-timed event as a possible overlap so the coordinator sees it and decides.
+  if (start1 === "TBA" || end1 === "TBA" || start2 === "TBA" || end2 === "TBA") return true;
   return start1 < end2 && start2 < end1;
+};
+// Same calendar date, regardless of time — for a soft warning badge only. Never used to block approval.
+const findSameDaySignups = (eventId, staffId, events, signups) => {
+  const ev = events.find(e => e.id === eventId);
+  if (!ev) return [];
+  const otherSignups = signups.filter(s => s.staff_id === staffId && (s.status === "confirmed" || s.status === "pending") && s.event_id !== eventId);
+  return otherSignups.map(s => {
+    const other = events.find(e => e.id === s.event_id);
+    if (!other) return null;
+    if (other.date === ev.date) return { ...other, signupStatus: s.status };
+    return null;
+  }).filter(Boolean);
 };
 const findConflicts = (eventId, staffId, events, signups) => {
   const ev = events.find(e => e.id === eventId);
@@ -1115,14 +1130,15 @@ const isTrafficError = (err) => {
 const scoreSignup = (signup, staff, event, allSignups, allEvents) => {
   let score = 0;
 
-  // +50 off duty that day (not their working shift)
-  const onShift = getShiftForDate(event.date) === staff.shift;
-  if (!onShift) score += 50;
-
   // +30 Kelly Day = staff has the day off their regular shift
   // Exception: payday Friday = Kelly Day skipped, they work regular shift (already handled in isKellyDay)
   const kelly = isKellyDay(event.date, staff.kelly_number, staff.shift);
   if (kelly) score += 30;
+
+  // +50 off duty that day (not their working shift). Kelly Day counts as off duty even though
+  // the calendar shift matches — they're excused from that day, so treat them as off, not on.
+  const onShift = !kelly && getShiftForDate(event.date) === staff.shift;
+  if (!onShift) score += 50;
 
   // +20 no time overlap with other confirmed events
   const conflicts = findConflicts(event.id, staff.id, allEvents, allSignups);
@@ -1701,22 +1717,34 @@ function CoordView({ profile, notify }) {
                       <div style={{ fontSize: 10, color: "var(--t2)", marginBottom: 8 }}>Sorted: Paramedic → EMT Advanced → EMT Basic. Within each group: off-duty ranks higher, Kelly Day off ranks higher, then earliest signup time wins.</div>
                       {sorted.map(s => {
                         const ac = profiles.find(p => p.id === s.staff_id); if (!ac) return null;
-                        const onShift = getShiftForDate(ev.date) === ac.shift;
-                        const gettingOff = getShiftForDate(ev.date) === NEXT_SHIFT[ac.shift];
+                        const isKelly = isKellyDay(ev.date, ac.kelly_number, ac.shift);
+                        // Kelly Day takes precedence — it means they're actually off, even on their normal shift date.
+                        const onShift = !isKelly && getShiftForDate(ev.date) === ac.shift;
+                        const gettingOff = !isKelly && getShiftForDate(ev.date) === NEXT_SHIFT[ac.shift];
                         const conflicts = findAllOverlaps(ev.id, s.staff_id, events, signups);
+                        const sameDayOnly = findSameDaySignups(ev.id, s.staff_id, events, signups).filter(sd => !conflicts.some(c => c.id === sd.id));
                         const isRec = recommended.has(s.id);
-                        const monthlyCount = signups.filter(su => su.staff_id === ac.id && su.status === "confirmed").length;
+                        const evMonth = new Date(ev.date + "T00:00:00");
+                        const monthlyCount = signups.filter(su => {
+                          if (su.staff_id !== ac.id || su.status !== "confirmed") return false;
+                          const suEv = events.find(e => e.id === su.event_id);
+                          if (!suEv) return false;
+                          const d = new Date(suEv.date + "T00:00:00");
+                          return d.getMonth() === evMonth.getMonth() && d.getFullYear() === evMonth.getFullYear();
+                        }).length;
                         return (
                           <div className="srow" key={s.id} style={isRec ? { borderLeft: "3px solid var(--g)", paddingLeft: 8 } : {}}>
                             <div>
                               <div className="sn">
                                 {isRec && <span style={{ color: "var(--g)", marginRight: 4 }}>⭐</span>}
                                 {ac.name}
+                                {isKelly && <span style={{ color: "var(--g)", fontSize: 10, marginLeft: 4 }}>🟢 Kelly Day (off duty)</span>}
                                 {onShift && <span style={{ color: "var(--o)", fontSize: 10, marginLeft: 4 }}>⚠️ On duty</span>}
                                 {gettingOff && <span style={{ color: "var(--a)", fontSize: 10, marginLeft: 4 }}>ℹ️ Off 0800</span>}
                               </div>
                               <div className="sme">{ac.level} · Shift {ac.shift} · {monthlyCount} event{monthlyCount !== 1 ? "s" : ""} this month · Signed up {fmtDateTime(s.signed_up_at)}</div>
                               {conflicts.length > 0 && <div style={{ fontSize: 10, marginTop: 2 }}>{conflicts.map((c, i) => <span key={i} style={{ color: c.signupStatus === "confirmed" ? "var(--r)" : "var(--o)", marginRight: 6 }}>{c.signupStatus === "confirmed" ? "🚫" : "⚡"} {c.name} ({c.signupStatus})</span>)}</div>}
+                              {sameDayOnly.length > 0 && <div style={{ fontSize: 10, marginTop: 2 }}>{sameDayOnly.map((c, i) => <span key={i} style={{ color: "var(--o)", marginRight: 6 }}>📅 Also signed up same day: {c.name} ({c.signupStatus})</span>)}</div>}
                             </div>
                             <div style={{ display: "flex", gap: 4 }}><button className="bt bts btg" onClick={() => approveSignup(s.id)}>Approve</button><button className="bt bts btr" onClick={() => denySignup(s.id)}>Deny</button></div>
                           </div>
