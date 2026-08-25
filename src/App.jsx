@@ -2043,18 +2043,21 @@ function CoordView({ profile, notify }) {
         const dupSignups = [];
         signups.forEach(s => {
           if (s.status === "cancelled") return;
-          const key = s.staff_id + "|" + s.event_id;
+          // Once an event is deleted, event_id becomes null for every affected signup — grouping on it directly
+          // would falsely flag any staff member with 2+ orphaned signups as "duplicates". Fall back to
+          // original_event_id (still identifies which specific event), or the row's own id if there's no
+          // identity to compare at all (never collides, so it's correctly never flagged).
+          const eventKey = s.event_id ?? (s.original_event_id ? `orig:${s.original_event_id}` : `row:${s.id}`);
+          const key = s.staff_id + "|" + eventKey;
           if (seen.has(key)) dupSignups.push(s); else seen.add(key);
         });
         const noSignupStaff = profiles.filter(p => p.approved && p.role === "staff" && !signups.find(s => s.staff_id === p.id));
         const missingFields = events.filter(e => !e.time_start || e.time_start === "TBA" || !e.time_end || e.time_end === "TBA" || (!e.venue && !e.location));
-        const ghostSignups = signups.filter(s => !events.find(e => e.id === s.event_id));
 
         const issues = [
           { id: "dup", label: "Duplicate signups (same staff + event)", count: dupSignups.length, color: "var(--r)", details: dupSignups.slice(0, 5).map(s => { const ev = events.find(e => e.id === s.event_id); const p = profiles.find(x => x.id === s.staff_id); return `${p?.name || "?"} → ${ev?.name || "?"} (${s.status})`; }) },
           { id: "nosignup", label: "Approved staff with zero signups", count: noSignupStaff.length, color: "var(--y)", details: noSignupStaff.slice(0, 10).map(p => `${p.name} (${p.level || "?"})`) },
           { id: "missing", label: "Events missing time or venue", count: missingFields.length, color: "var(--y)", details: missingFields.slice(0, 5).map(e => `${e.name} (${fmtDate(e.date)})`) },
-          { id: "ghost", label: "Signups for deleted events", count: ghostSignups.length, color: "var(--r)", details: ghostSignups.slice(0, 5).map(s => { const p = profiles.find(x => x.id === s.staff_id); return `${p?.name || "?"} · event ID ${s.event_id}`; }) },
         ];
         const totalIssues = issues.reduce((s, i) => s + i.count, 0);
 
