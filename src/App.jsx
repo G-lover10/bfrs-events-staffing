@@ -1485,21 +1485,6 @@ function CoordView({ profile, notify }) {
   };
 
   // ── Dashboard data ──
-  const staffHours = useMemo(() => {
-    const map = {};
-    attendance.forEach(a => {
-      if (!a.sign_out_time) return;
-      const hrs = parseFloat(calcHours(a.sign_in_time, a.sign_out_time)) || 0;
-      if (!map[a.staff_id]) map[a.staff_id] = { total: 0, events: 0 };
-      map[a.staff_id].total += hrs;
-      map[a.staff_id].events += 1;
-    });
-    return Object.entries(map).map(([id, d]) => {
-      const p = profiles.find(x => x.id === id);
-      return { id, name: p?.name || "?", level: p?.level || "?", shift: p?.shift || "?", ...d };
-    }).sort((a, b) => b.total - a.total);
-  }, [attendance, profiles]);
-
   // Approved (not clocked-in) hours per confirmed signup, with deleted-event fallback via snapshot data.
   const resolvedApprovedHours = useMemo(() => {
     return signups.filter(s => s.status === "confirmed").map(s => {
@@ -1508,6 +1493,18 @@ function CoordView({ profile, notify }) {
     }).filter(r => r.resolved);
   }, [signups, events]);
   const unresolvedApprovedCount = useMemo(() => signups.filter(s => s.status === "confirmed" && !resolveSignupEvent(s, events).resolved).length, [signups, events]);
+  const allTimeApprovedLeaderboard = useMemo(() => {
+    const map = {};
+    resolvedApprovedHours.forEach(r => {
+      if (!map[r.staffId]) map[r.staffId] = { total: 0, events: 0 };
+      map[r.staffId].total += r.hours;
+      map[r.staffId].events += 1;
+    });
+    return Object.entries(map).map(([id, d]) => {
+      const p = profiles.find(x => x.id === id);
+      return { id, name: p?.name || "?", level: p?.level || "?", shift: p?.shift || "?", ...d };
+    }).sort((a, b) => b.total - a.total);
+  }, [resolvedApprovedHours, profiles]);
 
   const availableMonths = useMemo(() => {
     const keys = new Set(resolvedApprovedHours.map(r => r.date.slice(0, 7)));
@@ -1560,8 +1557,8 @@ function CoordView({ profile, notify }) {
     notify("Attendance exported.");
   };
   const exportStaffHours = () => {
-    const headers = ["Staff Name", "Level", "Shift", "Total Hours", "Events Worked"];
-    const rows = staffHours.map(s => [s.name, s.level, s.shift, s.total.toFixed(1), s.events]);
+    const headers = ["Staff Name", "Level", "Shift", "Total Approved Hours", "Events"];
+    const rows = allTimeApprovedLeaderboard.map(s => [s.name, s.level, s.shift, s.total.toFixed(1), s.events]);
     downloadCSV(`bfrs-staff-hours-${new Date().toISOString().split("T")[0]}.csv`, headers, rows);
     notify("Staff hours exported.");
   };
@@ -1589,7 +1586,7 @@ function CoordView({ profile, notify }) {
         <div className="stc stc-link" onClick={() => setTab("staff")} title="Click to review"><div className="sv so">{pendingAccounts.length}</div><div className="svl">Pending Accts {pendingAccounts.length > 0 && "→"}</div></div>
         <div className="stc stc-link" onClick={() => setTab("events")} title="Click to review"><div className="sv sy">{pendingSignups.length}</div><div className="svl">Pending Signups {pendingSignups.length > 0 && "→"}</div></div>
         <div className="stc stc-link" onClick={() => setTab("cr")} title="Click to review"><div className="sv" style={{color:"var(--r)"}}>{pendingCR.length}</div><div className="svl">Withdrawals {pendingCR.length > 0 && "→"}</div></div>
-        <div className="stc stc-link" onClick={() => setTab("att")} title="View attendance"><div className="sv sg">{attendance.filter(a => a.sign_out_time).reduce((s, a) => s + (parseFloat(calcHours(a.sign_in_time, a.sign_out_time)) || 0), 0).toFixed(0)}</div><div className="svl">Total Hrs</div></div>
+        <div className="stc stc-link" onClick={() => setTab("att")} title="View hours leaderboard"><div className="sv sg">{resolvedApprovedHours.reduce((s,r)=>s+r.hours,0).toFixed(0)}</div><div className="svl">Total Approved Hrs</div></div>
       </div>
 
       {(pendingAccounts.length > 0 || pendingSignups.length > 0 || pendingCR.length > 0) && (
@@ -1644,12 +1641,12 @@ function CoordView({ profile, notify }) {
       </div>
 
       <div className="af">
-        <div className="sct">Staff Hours Leaderboard</div>
-        {staffHours.length === 0 && <div style={{ color: "var(--t2)", fontSize: 12 }}>No completed attendance records yet.</div>}
+        <div className="sct">Staff Approved Hours Leaderboard (All-Time)</div>
+        {allTimeApprovedLeaderboard.length === 0 && <div style={{ color: "var(--t2)", fontSize: 12 }}>No approved events yet.</div>}
         <table className="lt">
           <thead><tr><th>Name</th><th>Level</th><th>Shift</th><th>Hours</th><th>Events</th></tr></thead>
           <tbody>
-            {staffHours.slice(0, 20).map(s => (
+            {allTimeApprovedLeaderboard.slice(0, 20).map(s => (
               <tr key={s.id}>
                 <td style={{ fontWeight: 500 }}>{s.name}</td>
                 <td>{s.level}</td><td>{s.shift}</td>
@@ -2307,10 +2304,6 @@ function StaffView({ profile, notify, openHelpChat }) {
   const myEventIds = mySignups.map(s => s.event_id);
   const pendingCRCount = myCR.filter(c => c.status === "pending").length;
 
-  const myTotalHours = useMemo(() => {
-    return myAtt.filter(a => a.sign_out_time).reduce((s, a) => s + (parseFloat(calcHours(a.sign_in_time, a.sign_out_time)) || 0), 0);
-  }, [myAtt]);
-
   const myScheduledHours = useMemo(() => {
     return mySignups.filter(s => s.status === "confirmed").reduce((sum, s) => {
       const info = resolveSignupEvent(s, events);
@@ -2471,7 +2464,7 @@ function StaffView({ profile, notify, openHelpChat }) {
         <div className="stc stc-link" onClick={() => setTab("events")} title="View all events"><div className="sv sa">{visibleEvents.length}</div><div className="svl">Events</div></div>
         <div className="stc stc-link" onClick={() => setTab("my")} title="View your events"><div className="sv so">{mySignups.filter(s=>s.status==="pending").length}</div><div className="svl">Pending</div></div>
         <div className="stc stc-link" onClick={() => setTab("my")} title="View your events"><div className="sv sg">{mySignups.filter(s=>s.status==="confirmed").length}</div><div className="svl">Approved</div></div>
-        <div className="stc stc-link" onClick={() => setTab("hours")} title="View your hours"><div className="sv sy">{myTotalHours.toFixed(1)}</div><div className="svl">My Hours</div></div>
+        <div className="stc stc-link" onClick={() => setTab("hours")} title="View your hours"><div className="sv sy">{myScheduledHours.toFixed(1)}</div><div className="svl">My Hours</div></div>
         <div className="stc stc-link" onClick={() => setTab("profile")} title="Edit your profile"><div className="sv sa" style={{fontSize:20}}>👤</div><div className="svl">My Profile</div></div>
         <div className="stc stc-link" onClick={openHelpChat} title="Ask the app assistant"><div className="sv sa" style={{fontSize:20}}>🤖</div><div className="svl">Help</div></div>
       </div>
