@@ -23,6 +23,33 @@ const fmtDateTime = (iso) => { if (!iso) return "—"; const d = new Date(iso); 
 const fmtFull = (iso) => { if (!iso) return "—"; const d = new Date(iso); return d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" }); };
 const calcHours = (inT, outT) => { if (!inT || !outT) return "0.0"; return ((new Date(outT) - new Date(inT)) / 3600000).toFixed(1); };
 const eventHours = (ev) => { if (!ev || !ev.time_start || !ev.time_end || ev.time_start === "TBA" || ev.time_end === "TBA") return 0; const [sh, sm] = ev.time_start.split(":").map(Number); const [eh, em] = ev.time_end.split(":").map(Number); let h = (eh + (em||0)/60) - (sh + (sm||0)/60); if (h < 0) h += 24; return h; };
+// Resolve a signup's event info: prefer the live event, fall back to the snapshot captured at signup time
+// (protects against the event having been deleted since). Returns resolved:false only when neither exists.
+const resolveSignupEvent = (su, events) => {
+  const liveEv = events.find(e => e.id === su.event_id);
+  if (liveEv) return { name: liveEv.name, date: liveEv.date, time_start: liveEv.time_start, time_end: liveEv.time_end, hours: eventHours(liveEv), resolved: true, deleted: false };
+  if (su.snapshot_event_date) {
+    return { name: su.snapshot_event_name || "Deleted event", date: su.snapshot_event_date, time_start: null, time_end: null, hours: su.snapshot_hours || 0, resolved: true, deleted: true };
+  }
+  return { name: null, date: null, time_start: null, time_end: null, hours: 0, resolved: false, deleted: true };
+};
+// Same idea for an attendance record. Attendance itself has no snapshot columns, so when its event is
+// gone, borrow the date/name from a matching signup (same staff + original_event_id) that does have one.
+const resolveAttendanceEvent = (att, events, signups) => {
+  const liveEv = events.find(e => e.id === att.event_id);
+  if (liveEv) return { name: liveEv.name, date: liveEv.date, resolved: true };
+  if (att.original_event_id) {
+    const su = signups.find(s => s.staff_id === att.staff_id && s.original_event_id === att.original_event_id && s.snapshot_event_date);
+    if (su) return { name: su.snapshot_event_name, date: su.snapshot_event_date, resolved: true };
+  }
+  return { name: null, date: null, resolved: false };
+};
+// Match an attendance record to a signup even after the live event_id is gone (both fall back to original_event_id).
+const findAttendanceForSignup = (su, atts) => {
+  if (su.event_id) { const m = atts.find(a => a.event_id === su.event_id); if (m) return m; }
+  if (su.original_event_id) return atts.find(a => a.original_event_id === su.original_event_id);
+  return null;
+};
 
 // ─── SHIFT CALCULATOR (24 on, 48 off: A→B→C) ─────────────────────────────────
 // Reference: March 26, 2026 = C shift
@@ -1198,8 +1225,9 @@ function CoordView({ profile, notify }) {
   const fileRef = useRef(null);
   const [upRes, setUpRes] = useState(null);
   const [previewEvs, setPreviewEvs] = useState(null);
-  const [editingAttId, setEditingAttId] = useState(null);
-  const [editAttTimes, setEditAttTimes] = useState({clockIn:"", clockOut:""});
+  const [lbMode, setLbMode] = useState("month"); // "month" | "period"
+  const [lbMonth, setLbMonth] = useState("");
+  const [lbPayday, setLbPayday] = useState("");
 
   const pendingAccounts = profiles.filter(p => !p.approved && p.role === "staff");
   const pendingCR = cancelReqs.filter(c => c.status === "pending");
@@ -1472,6 +1500,54 @@ function CoordView({ profile, notify }) {
     }).sort((a, b) => b.total - a.total);
   }, [attendance, profiles]);
 
+  // Approved (not clocked-in) hours per confirmed signup, with deleted-event fallback via snapshot data.
+  const resolvedApprovedHours = useMemo(() => {
+    return signups.filter(s => s.status === "confirmed").map(s => {
+      const info = resolveSignupEvent(s, events);
+      return { staffId: s.staff_id, ...info };
+    }).filter(r => r.resolved);
+  }, [signups, events]);
+  const unresolvedApprovedCount = useMemo(() => signups.filter(s => s.status === "confirmed" && !resolveSignupEvent(s, events).resolved).length, [signups, events]);
+
+  const availableMonths = useMemo(() => {
+    const keys = new Set(resolvedApprovedHours.map(r => r.date.slice(0, 7)));
+    const todayKey = new Date().toISOString().slice(0, 7);
+    keys.add(todayKey);
+    return [...keys].sort().reverse().map(key => {
+      const dt = new Date(key + "-01T00:00:00");
+      return { key, label: dt.toLocaleDateString("en-US", { month: "long", year: "numeric" }) };
+    });
+  }, [resolvedApprovedHours]);
+  const availablePeriods = useMemo(() => {
+    const map = new Map();
+    resolvedApprovedHours.forEach(r => {
+      const p = getPayPeriodForDate(r.date);
+      if (p && !map.has(p.payday)) map.set(p.payday, p);
+    });
+    const todayPeriod = getPayPeriodForDate(new Date().toISOString().slice(0, 10));
+    if (todayPeriod && !map.has(todayPeriod.payday)) map.set(todayPeriod.payday, todayPeriod);
+    return [...map.values()].sort((a, b) => b.payday.localeCompare(a.payday));
+  }, [resolvedApprovedHours]);
+
+  const approvedLeaderboard = useMemo(() => {
+    const month = lbMonth || availableMonths[0]?.key;
+    const payday = lbPayday || availablePeriods[0]?.payday;
+    const filtered = resolvedApprovedHours.filter(r => {
+      if (lbMode === "month") return r.date.slice(0, 7) === month;
+      return getPayPeriodForDate(r.date)?.payday === payday;
+    });
+    const map = {};
+    filtered.forEach(r => {
+      if (!map[r.staffId]) map[r.staffId] = { total: 0, events: 0 };
+      map[r.staffId].total += r.hours;
+      map[r.staffId].events += 1;
+    });
+    return Object.entries(map).map(([id, d]) => {
+      const p = profiles.find(x => x.id === id);
+      return { id, name: p?.name || "?", level: p?.level || "?", shift: p?.shift || "?", ...d };
+    }).sort((a, b) => b.total - a.total);
+  }, [resolvedApprovedHours, lbMode, lbMonth, lbPayday, availableMonths, availablePeriods, profiles]);
+
   // ── CSV Export ──
   const exportAttendance = () => {
     const headers = ["Staff Name", "Level", "Shift", "Event", "Date", "Sign In", "Sign Out", "Hours"];
@@ -1497,7 +1573,7 @@ function CoordView({ profile, notify }) {
       <button className={`tb${tab === "dash" ? " on" : ""}`} onClick={() => setTab("dash")}>Dashboard</button>
       <button className={`tb${tab === "events" ? " on" : ""}`} onClick={() => setTab("events")}>Events{pendingSignups.length>0&&<span className="nd or">{pendingSignups.length}</span>}</button>
       <button className={`tb${tab === "staff" ? " on" : ""}`} onClick={() => setTab("staff")}>Staff{pendingAccounts.length > 0 && <span className="nd or">{pendingAccounts.length}</span>}</button>
-      <button className={`tb${tab === "att" ? " on" : ""}`} onClick={() => setTab("att")}>Attendance</button>
+      <button className={`tb${tab === "att" ? " on" : ""}`} onClick={() => setTab("att")}>Hours Leaderboard</button>
       <button className={`tb${tab === "cr" ? " on" : ""}`} onClick={() => setTab("cr")}>Cancel Reqs{pendingCR.length > 0 && <span className="nd or">{pendingCR.length}</span>}</button>
       <button className={`tb${tab === "log" ? " on" : ""}`} onClick={() => setTab("log")}>Activity Log</button>
       <button className={`tb${tab === "health" ? " on" : ""}`} onClick={() => setTab("health")}>Health</button>
@@ -1874,83 +1950,37 @@ function CoordView({ profile, notify }) {
 
     {/* ── ATTENDANCE TAB ── */}
     {tab === "att" && <>
-      <div className="stw">
-        <div className="stc"><div className="sv sa">{attendance.length}</div><div className="svl">Records</div></div>
-        <div className="stc"><div className="sv sg">{attendance.filter(a => a.sign_out_time).reduce((s, a) => s + (parseFloat(calcHours(a.sign_in_time, a.sign_out_time)) || 0), 0).toFixed(1)}</div><div className="svl">Hours</div></div>
-        <div className="stc"><div className="sv sy">{attendance.filter(a => !a.sign_out_time).length}</div><div className="svl">Active</div></div>
+      <div style={{display:"flex",gap:6,marginBottom:12}}>
+        <button className={`bt bts ${lbMode==="month"?"bta":""}`} onClick={()=>setLbMode("month")}>By Month</button>
+        <button className={`bt bts ${lbMode==="period"?"bta":""}`} onClick={()=>setLbMode("period")}>By Pay Period</button>
       </div>
-      <button className="bt bp" style={{ marginBottom: 14 }} onClick={exportAttendance}>📥 Export CSV</button>
-      {attendance.length === 0 && <div className="ey"><div className="ei">🕐</div>No clock records yet.</div>}
-      {attendance.map(a => {
-        const ac = profiles.find(x => x.id === a.staff_id);
-        const ev = events.find(x => x.id === a.event_id);
-        const isEdit = editingAttId === a.id;
-        const timeOpts = Array.from({length:24*4},(_,i)=>{
-          const h=Math.floor(i/4).toString().padStart(2,"0");
-          const m=(i%4*15).toString().padStart(2,"0");
-          return {label:`${h}:${m}`,val:(ev?.date||"2026-01-01")+"T"+h+":"+m+":00"};
-        });
-        return (
-          <div key={a.id} style={{background:"var(--s)",border:"1px solid var(--bd)",borderRadius:10,padding:"12px 14px",marginBottom:8}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-              <div style={{flex:1}}>
-                <div style={{fontWeight:700,fontSize:14}}>{ac?.name || "?"}</div>
-                <div style={{fontSize:12,color:"var(--t2)"}}>{ev?.name || "?"} · {fmtDate(ev?.date)}</div>
-                <div style={{fontSize:12,marginTop:4}}>
-                  <span style={{color:"var(--t2)"}}>In: </span>{fmtDateTime(a.sign_in_time)}
-                  {a.sign_out_time
-                    ? <><span style={{color:"var(--t2)"}}> · Out: </span>{fmtDateTime(a.sign_out_time)} · <span style={{color:"var(--g)",fontWeight:600}}>{calcHours(a.sign_in_time,a.sign_out_time)} hrs</span></>
-                    : <span className="bg si" style={{marginLeft:6}}>Active</span>}
-                </div>
-              </div>
-              <div style={{display:"flex",gap:6,flexShrink:0}}>
-                <button className="bt bts bta" style={{fontSize:11,padding:"4px 10px"}} onClick={() => {
-                  if (isEdit) { setEditingAttId(null); return; }
-                  setEditingAttId(a.id);
-                  setEditAttTimes({clockIn:a.sign_in_time||"",clockOut:a.sign_out_time||""});
-                }}>✏️ {isEdit ? "Cancel" : "Edit"}</button>
-                <button className="bt bts btr" style={{fontSize:11,padding:"4px 10px"}} onClick={async() => {
-                  if (!window.confirm(`Delete clock record for ${ac?.name}? Cannot be undone.`)) return;
-                  await supabase.from("attendance").delete().eq("id",a.id);
-                  await logActivity("deleted_attendance","attendance",a.id,{staffName:ac?.name,eventName:ev?.name});
-                  notify(`Record deleted for ${ac?.name}.`); refresh();
-                }}>🗑 Delete</button>
-              </div>
-            </div>
-            {isEdit && (
-              <div style={{marginTop:12,borderTop:"1px solid var(--bd)",paddingTop:12}}>
-                <div style={{fontWeight:600,fontSize:12,marginBottom:8,color:"var(--a)"}}>Edit Times</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-                  <div>
-                    <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:3}}>Clock In *</label>
-                    <select className="fi" style={{fontSize:12}} value={editAttTimes.clockIn} onChange={e=>setEditAttTimes(p=>({...p,clockIn:e.target.value}))}>
-                      <option value="">-- Select time --</option>
-                      {timeOpts.map(o=><option key={o.val} value={o.val}>{o.label}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{fontSize:11,color:"var(--t2)",display:"block",marginBottom:3}}>Clock Out</label>
-                    <select className="fi" style={{fontSize:12}} value={editAttTimes.clockOut} onChange={e=>setEditAttTimes(p=>({...p,clockOut:e.target.value}))}>
-                      <option value="">-- Not clocked out --</option>
-                      {timeOpts.map(o=><option key={o.val} value={o.val}>{o.label}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <button className="bt btg" style={{fontSize:12,width:"100%"}} onClick={async()=>{
-                  if (!editAttTimes.clockIn) { notify("Clock In time is required.","error"); return; }
-                  const updates={sign_in_time:editAttTimes.clockIn};
-                  if (editAttTimes.clockOut) updates.sign_out_time=editAttTimes.clockOut;
-                  else updates.sign_out_time=null;
-                  const {error}=await supabase.from("attendance").update(updates).eq("id",a.id);
-                  if (error) { notify(error.message,"error"); return; }
-                  await logActivity("edited_attendance","attendance",a.id,{staffName:ac?.name,eventName:ev?.name});
-                  notify("Times updated."); setEditingAttId(null); refresh();
-                }}>Save Changes</button>
-              </div>
-            )}
-          </div>
-        );
-      })}
+      {lbMode === "month" ? (
+        <select className="fi" style={{marginBottom:14}} value={lbMonth || availableMonths[0]?.key || ""} onChange={e=>setLbMonth(e.target.value)}>
+          {availableMonths.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
+        </select>
+      ) : (
+        <select className="fi" style={{marginBottom:14}} value={lbPayday || availablePeriods[0]?.payday || ""} onChange={e=>setLbPayday(e.target.value)}>
+          {availablePeriods.map(p => <option key={p.payday} value={p.payday}>{p.checkLabel} ({p.rangeLabel})</option>)}
+        </select>
+      )}
+      <div className="af">
+        <div className="sct">Approved Hours — Ranked</div>
+        {approvedLeaderboard.length === 0 && <div style={{ color: "var(--t2)", fontSize: 12 }}>No approved hours for this {lbMode === "month" ? "month" : "pay period"}.</div>}
+        <table className="lt">
+          <thead><tr><th>Name</th><th>Level</th><th>Shift</th><th>Hours</th><th>Events</th></tr></thead>
+          <tbody>
+            {approvedLeaderboard.map((s, i) => (
+              <tr key={s.id}>
+                <td style={{ fontWeight: 500 }}>{i === 0 && "🥇 "}{i === 1 && "🥈 "}{i === 2 && "🥉 "}{s.name}</td>
+                <td>{s.level}</td><td>{s.shift}</td>
+                <td style={{ color: "var(--g)", fontWeight: 600 }}>{s.total.toFixed(1)}</td>
+                <td>{s.events}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {unresolvedApprovedCount > 0 && <div style={{fontSize:11,color:"var(--t2)",marginTop:10}}>⚠️ {unresolvedApprovedCount} confirmed signup{unresolvedApprovedCount===1?"":"s"} system-wide {unresolvedApprovedCount===1?"has":"have"} no recoverable date (event deleted before details were tracked) and {unresolvedApprovedCount===1?"isn't":"aren't"} included above.</div>}
+      </div>
     </>}
 
     {/* ── CANCEL REQUESTS ── */}
@@ -2283,34 +2313,38 @@ function StaffView({ profile, notify, openHelpChat }) {
 
   const myScheduledHours = useMemo(() => {
     return mySignups.filter(s => s.status === "confirmed").reduce((sum, s) => {
-      const ev = events.find(e => e.id === s.event_id);
-      return sum + eventHours(ev);
+      const info = resolveSignupEvent(s, events);
+      return sum + (info.resolved ? info.hours : 0);
     }, 0);
   }, [mySignups, events]);
 
   const monthGroups = useMemo(() => {
     const byPayday = new Map();
     const todayISO = new Date().toISOString().slice(0, 10);
+    const unresolved = []; // confirmed signups with no live event AND no snapshot data — nothing to show
+    const usedAttIds = new Set();
     mySignups.filter(s => s.status === "confirmed").forEach(s => {
-      const ev = events.find(e => e.id === s.event_id);
-      if (!ev || !ev.date) return;
-      const period = getPayPeriodForDate(ev.date);
-      if (!period) return;
+      const info = resolveSignupEvent(s, events);
+      if (!info.resolved) { unresolved.push(s); return; }
+      const period = getPayPeriodForDate(info.date);
+      if (!period) { unresolved.push(s); return; }
       if (!byPayday.has(period.payday)) byPayday.set(period.payday, { period, events: [], orphans: [] });
       const slot = byPayday.get(period.payday);
-      const scheduled = eventHours(ev);
-      const att = myAtt.find(a => a.event_id === ev.id);
+      const scheduled = info.hours;
+      const att = findAttendanceForSignup(s, myAtt);
+      if (att) usedAttIds.add(att.id);
       let status, worked = 0;
       if (att?.sign_in_time && att?.sign_out_time) { status = "worked"; worked = parseFloat(calcHours(att.sign_in_time, att.sign_out_time)) || 0; }
       else if (att?.sign_in_time) { status = "in_progress"; }
-      else { status = (ev.date < todayISO) ? "missed" : "upcoming"; }
-      slot.events.push({ ev, scheduled, worked, status, att });
+      else { status = (info.date < todayISO) ? "missed" : "upcoming"; }
+      slot.events.push({ ev: { id: s.id, name: info.name, date: info.date, time_start: info.time_start, time_end: info.time_end }, scheduled, worked, status, att, deleted: info.deleted });
     });
+    // Standalone clock-ins with no matching confirmed signup at all (rare — e.g. coordinator clocked someone in manually)
     myAtt.forEach(a => {
-      const ev = events.find(e => e.id === a.event_id);
-      if (ev && ev.date) return;
+      if (usedAttIds.has(a.id)) return;
       if (!a.sign_in_time) return;
-      const isoDate = new Date(a.sign_in_time).toISOString().slice(0, 10);
+      const info = resolveAttendanceEvent(a, events, signups);
+      const isoDate = info.resolved ? info.date : new Date(a.sign_in_time).toISOString().slice(0, 10);
       const period = getPayPeriodForDate(isoDate);
       if (!period) return;
       if (!byPayday.has(period.payday)) byPayday.set(period.payday, { period, events: [], orphans: [] });
@@ -2334,8 +2368,8 @@ function StaffView({ profile, notify, openHelpChat }) {
       m.scheduled += p.scheduled;
       m.worked += p.worked;
     });
-    return [...months.values()];
-  }, [mySignups, events, myAtt]);
+    return { months: [...months.values()], unresolved };
+  }, [mySignups, events, myAtt, signups]);
 
   const signUpForEvent = async (eventId) => {
     if (!profile?.id) { notify("Your profile didn't load correctly. Please refresh the page or log out and back in.", "error"); return; }
@@ -2529,8 +2563,8 @@ function StaffView({ profile, notify, openHelpChat }) {
           ⏳ You have {myAtt.filter(a => !a.sign_out_time).length} active clock-in{myAtt.filter(a => !a.sign_out_time).length === 1 ? "" : "s"}.
         </div>
       )}
-      {monthGroups.length === 0 && <div className="ey"><div className="ei">⏱️</div>No confirmed events yet — sign up for events and they'll show here grouped by pay period.</div>}
-      {monthGroups.map(month => (
+      {monthGroups.months.length === 0 && monthGroups.unresolved.length === 0 && <div className="ey"><div className="ei">⏱️</div>No confirmed events yet — sign up for events and they'll show here grouped by pay period.</div>}
+      {monthGroups.months.map(month => (
         <div key={month.key} style={{marginBottom:24}}>
           <div style={{fontSize:14,fontWeight:600,color:"var(--t)",padding:"8px 4px",borderBottom:"1px solid var(--bd)",marginBottom:8}}>
             📅 {month.label} Total — <span style={{color:"var(--a)"}}>{month.scheduled.toFixed(1)} hrs scheduled</span> | <span style={{color:"var(--g)"}}>{month.worked.toFixed(1)} hrs worked</span>
@@ -2548,9 +2582,9 @@ function StaffView({ profile, notify, openHelpChat }) {
                   const isTBA = !ev.time_start || ev.time_start === "TBA";
                   return (
                     <div key={ev.id} style={{padding:"10px 14px",borderTop:"1px solid var(--bd)"}}>
-                      <div style={{fontWeight:600,fontSize:14}}>{ev.name}</div>
+                      <div style={{fontWeight:600,fontSize:14}}>{ev.name}{row.deleted && <span style={{fontSize:10,color:"var(--o)",marginLeft:6,fontWeight:500}}>🗑 event since deleted</span>}</div>
                       <div style={{fontSize:12,color:"var(--t2)",marginTop:2}}>
-                        {fmtDate(ev.date)} · {isTBA ? "Time TBA" : `${fmtTime(ev.time_start)}–${fmtTime(ev.time_end)}`} · 📅 {row.scheduled.toFixed(1)} hrs scheduled
+                        {fmtDate(ev.date)} · {row.deleted ? "Time n/a" : (isTBA ? "Time TBA" : `${fmtTime(ev.time_start)}–${fmtTime(ev.time_end)}`)} · 📅 {row.scheduled.toFixed(1)} hrs scheduled
                       </div>
                       <div style={{fontSize:12,marginTop:4}}>
                         {row.status === "worked" && <span style={{color:"var(--g)"}}>✅ Worked: {row.worked.toFixed(1)} hrs <span style={{color:"var(--t2)",fontFamily:"'DM Mono',monospace"}}>· {fmtDateTime(row.att.sign_in_time)} → {fmtDateTime(row.att.sign_out_time)}</span></span>}
@@ -2574,6 +2608,12 @@ function StaffView({ profile, notify, openHelpChat }) {
           })}
         </div>
       ))}
+      {monthGroups.unresolved.length > 0 && (
+        <div className="cd" style={{padding:"12px 14px",marginTop:8,background:"rgba(248,113,113,.05)",borderColor:"rgba(248,113,113,.2)"}}>
+          <div style={{fontWeight:600,fontSize:13,color:"var(--r)"}}>⚠️ {monthGroups.unresolved.length} older confirmed event{monthGroups.unresolved.length===1?"":"s"} with details lost</div>
+          <div style={{fontSize:11,color:"var(--t2)",marginTop:4}}>These were approved before the app started keeping a backup copy of event details. The event was later deleted, so the name, date, and hours can't be recovered — not included in totals above.</div>
+        </div>
+      )}
     </>}
 
     {/* ── CANCEL REQUESTS ── */}
