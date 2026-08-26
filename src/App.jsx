@@ -793,13 +793,23 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const loadProfile = async (uid) => {
+  const loadProfile = async (uid, retryCount = 0) => {
     const { data } = await supabase.from("profiles").select("*").eq("id", uid).single();
     if (data) { setProfile(data); setLoading(false); return; }
+    // A transient RLS/session-timing race (e.g. during Supabase's automatic token refresh) can make
+    // an existing, already-approved profile briefly invisible to this SELECT. Retry before concluding
+    // it's genuinely missing — treating one failed read as proof was silently de-approving real accounts.
+    if (retryCount < 2) {
+      await new Promise(r => setTimeout(r, 600));
+      return loadProfile(uid, retryCount + 1);
+    }
     // Auto-repair: profile row missing (registration upsert likely failed under
     // RLS before session was established). Rebuild from auth user metadata.
     const { data: authData } = await supabase.auth.getUser();
     const meta = authData?.user?.user_metadata || {};
+    // Belt-and-suspenders: even after retries, don't blindly reset approval status in the rebuild.
+    // If this person has ever been approved before, honor that instead of silently re-locking them.
+    const { data: priorApproval } = await supabase.from("activity_log").select("id").eq("action", "approved_account").eq("target_id", uid).limit(1);
     const repaired = {
       id: uid,
       email: authData?.user?.email || "",
@@ -809,7 +819,7 @@ export default function App() {
       phone: meta.phone || "",
       kelly_number: meta.kelly_number || null,
       role: meta.role || "staff",
-      approved: false,
+      approved: (priorApproval && priorApproval.length > 0) ? true : false,
     };
     const { data: upserted, error: upErr } = await supabase.from("profiles").upsert(repaired, { onConflict: "id" }).select().single();
     if (upErr) { console.error("Profile auto-repair failed:", upErr); setProfile(null); }
