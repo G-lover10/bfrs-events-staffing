@@ -780,7 +780,7 @@ export default function App() {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       if (isRecoveryUrl) { setLoading(false); return; }
-      if (s) loadProfile(s.user.id); else setLoading(false);
+      if (s) loadProfile(s); else setLoading(false);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_ev, s) => {
       // Password-recovery deep link: Supabase establishes a temporary session and
@@ -788,43 +788,40 @@ export default function App() {
       // instead of dropping the user straight into the app.
       if (_ev === "PASSWORD_RECOVERY") { setRecovery(true); setSession(s); setLoading(false); return; }
       setSession(s);
-      if (s) loadProfile(s.user.id); else { setProfile(null); setLoading(false); }
+      if (s) loadProfile(s); else { setProfile(null); setLoading(false); }
     });
     return () => subscription.unsubscribe();
   }, []);
 
-  const loadProfile = async (uid, retryCount = 0) => {
-    const { data } = await supabase.from("profiles").select("*").eq("id", uid).single();
-    if (data) { setProfile(data); setLoading(false); return; }
-    // A transient RLS/session-timing race (e.g. during Supabase's automatic token refresh) can make
-    // an existing, already-approved profile briefly invisible to this SELECT. Retry before concluding
-    // it's genuinely missing — treating one failed read as proof was silently de-approving real accounts.
-    if (retryCount < 2) {
-      await new Promise(r => setTimeout(r, 600));
-      return loadProfile(uid, retryCount + 1);
+  const loadProfile = async (sess, retryCount = 0) => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch("/.netlify/functions/get-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${sess.access_token}` },
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (res.status === 401) {
+        // Genuinely not authenticated -- no point retrying, this is a real "please log in" case.
+        setProfile(null); setLoading(false); return;
+      }
+      if (!res.ok) throw new Error(`get-profile returned ${res.status}`);
+      const { profile } = await res.json();
+      setProfile(profile);
+      setLoading(false);
+    } catch (e) {
+      // Network error, timeout, or a 5xx -- transient, not a real "logged out" state. Retry a couple
+      // times before giving up, so a brief hiccup doesn't bounce an already-approved person to login.
+      if (retryCount < 2) {
+        await new Promise(r => setTimeout(r, 800));
+        return loadProfile(sess, retryCount + 1);
+      }
+      console.error("loadProfile failed after retries:", e);
+      setProfile(null);
+      setLoading(false);
     }
-    // Auto-repair: profile row missing (registration upsert likely failed under
-    // RLS before session was established). Rebuild from auth user metadata.
-    const { data: authData } = await supabase.auth.getUser();
-    const meta = authData?.user?.user_metadata || {};
-    // Belt-and-suspenders: even after retries, don't blindly reset approval status in the rebuild.
-    // If this person has ever been approved before, honor that instead of silently re-locking them.
-    const { data: priorApproval } = await supabase.from("activity_log").select("id").eq("action", "approved_account").eq("target_id", uid).limit(1);
-    const repaired = {
-      id: uid,
-      email: authData?.user?.email || "",
-      name: meta.name || "",
-      level: meta.level || "",
-      shift: meta.shift || "",
-      phone: meta.phone || "",
-      kelly_number: meta.kelly_number || null,
-      role: meta.role || "staff",
-      approved: (priorApproval && priorApproval.length > 0) ? true : false,
-    };
-    const { data: upserted, error: upErr } = await supabase.from("profiles").upsert(repaired, { onConflict: "id" }).select().single();
-    if (upErr) { console.error("Profile auto-repair failed:", upErr); setProfile(null); }
-    else { setProfile(upserted); }
-    setLoading(false);
   };
 
   const handleLogout = async () => { await supabase.auth.signOut(); setSession(null); setProfile(null); };
@@ -1556,16 +1553,6 @@ function CoordView({ profile, notify }) {
   }, [resolvedApprovedHours, lbMode, lbMonth, lbPayday, availableMonths, availablePeriods, profiles]);
 
   // ── CSV Export ──
-  const exportAttendance = () => {
-    const headers = ["Staff Name", "Level", "Shift", "Event", "Date", "Sign In", "Sign Out", "Hours"];
-    const rows = attendance.map(a => {
-      const ac = profiles.find(x => x.id === a.staff_id);
-      const ev = events.find(x => x.id === a.event_id);
-      return [ac?.name, ac?.level, ac?.shift, ev?.name, ev?.date, a.sign_in_time, a.sign_out_time || "", a.sign_out_time ? calcHours(a.sign_in_time, a.sign_out_time) : ""];
-    });
-    downloadCSV(`bfrs-attendance-${new Date().toISOString().split("T")[0]}.csv`, headers, rows);
-    notify("Attendance exported.");
-  };
   const exportStaffHours = () => {
     const headers = ["Staff Name", "Level", "Shift", "Total Approved Hours", "Events"];
     const rows = allTimeApprovedLeaderboard.map(s => [s.name, s.level, s.shift, s.total.toFixed(1), s.events]);
@@ -1646,7 +1633,6 @@ function CoordView({ profile, notify }) {
       )}
 
       <div className="dbr">
-        <button className="bt bp" onClick={exportAttendance}>📥 Export Attendance CSV</button>
         <button className="bt bp" onClick={exportStaffHours}>📥 Export Staff Hours CSV</button>
       </div>
 
