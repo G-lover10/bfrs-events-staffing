@@ -777,18 +777,37 @@ export default function App() {
     })();
     if (isRecoveryUrl) setRecovery(true);
 
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
+    // If this running session's code is stale relative to what's actually deployed, force a
+    // reload before doing anything auth-related, rather than relying on the passive "tap to
+    // refresh" banner (which requires the user to notice it -- an already-open, backgrounded
+    // session could otherwise keep running old code indefinitely across every future login and
+    // token refresh). Note: this only protects sessions running THIS deploy's code going forward
+    // -- it can't reach into an already-loaded old bundle sitting in someone's memory right now.
+    const bailIfStale = async () => {
+      try {
+        const res = await fetch("/version.json?t=" + Date.now(), { cache: "no-cache" });
+        if (!res.ok) return false;
+        const data = await res.json();
+        if (initialBuildRef.current !== null && data.build && data.build > initialBuildRef.current) {
+          window.location.reload();
+          return true;
+        }
+      } catch { /* offline or dev -- don't block on this */ }
+      return false;
+    };
+
+    supabase.auth.getSession().then(async ({ data: { session: s } }) => {
       setSession(s);
       if (isRecoveryUrl) { setLoading(false); return; }
-      if (s) loadProfile(s); else setLoading(false);
+      if (s) { if (await bailIfStale()) return; loadProfile(s); } else setLoading(false);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_ev, s) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_ev, s) => {
       // Password-recovery deep link: Supabase establishes a temporary session and
       // fires PASSWORD_RECOVERY. Flag it so we show the "set new password" screen
       // instead of dropping the user straight into the app.
       if (_ev === "PASSWORD_RECOVERY") { setRecovery(true); setSession(s); setLoading(false); return; }
       setSession(s);
-      if (s) loadProfile(s); else { setProfile(null); setLoading(false); }
+      if (s) { if (await bailIfStale()) return; loadProfile(s); } else { setProfile(null); setLoading(false); }
     });
     return () => subscription.unsubscribe();
   }, []);
