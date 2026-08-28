@@ -52,7 +52,16 @@ exports.handler = async (event) => {
   // Belt-and-suspenders, now reliable: this read is server-side via service role, not subject to
   // the RLS-timing issue that made the same check unreliable when it lived client-side. If this
   // person has ever been approved before, honor that instead of defaulting to false.
-  const { data: priorApproval } = await supabase.from("activity_log").select("id").eq("action", "approved_account").eq("target_id", uid).limit(1);
+  //
+  // IMPORTANT: check the error here. An unchecked failure on this query would silently look
+  // identical to "confirmed no history" and default to approved:false on an ambiguous result --
+  // the exact same category of mistake that caused the original bug. If this query itself fails,
+  // don't proceed on a guess -- fail the request so the client retries instead.
+  const { data: priorApproval, error: histErr } = await supabase.from("activity_log").select("id").eq("action", "approved_account").eq("target_id", uid).limit(1);
+  if (histErr) {
+    return { statusCode: 500, headers, body: JSON.stringify({ error: "history check failed: " + histErr.message }) };
+  }
+  const wasApprovedBefore = priorApproval && priorApproval.length > 0;
   const repaired = {
     id: uid,
     email: authUser.email || "",
@@ -62,7 +71,7 @@ exports.handler = async (event) => {
     phone: meta.phone || "",
     kelly_number: meta.kelly_number || null,
     role: meta.role || "staff",
-    approved: (priorApproval && priorApproval.length > 0) ? true : false,
+    approved: wasApprovedBefore,
   };
   // insert, not upsert: if a row now exists (a concurrent request from another tab/device beat us
   // here between our SELECT and this write), a plain insert fails loudly on the conflict instead of
@@ -77,5 +86,11 @@ exports.handler = async (event) => {
     }
     return { statusCode: 500, headers, body: JSON.stringify({ error: insErr.message }) };
   }
+  // Log this — the rebuild path firing at all for an existing user is anomalous and worth a trail.
+  // Best-effort: don't fail the whole request if only the log write itself has a problem.
+  await supabase.from("activity_log").insert({
+    action: "profile_rebuilt", target_type: "profile", target_id: uid,
+    details: { name: repaired.name, email: repaired.email, restoredApproved: wasApprovedBefore },
+  }).then(() => {}, () => {});
   return { statusCode: 200, headers, body: JSON.stringify({ profile: created, created: true }) };
 };
