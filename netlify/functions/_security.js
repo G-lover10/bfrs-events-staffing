@@ -3,7 +3,8 @@
 // Auth: verify a Supabase user JWT by hitting Supabase's /auth/v1/user endpoint.
 
 const SUPABASE_URL = "https://tohhqssnngvavkkeqzfl.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvaGhxc3Nubmd2YXZra2VxemZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1NDg2NTAsImV4cCI6MjA5MDEyNDY1MH0.3mma-zOBQ63AM7FgHjRrKrnB_MX1FljnJPCrpmAMbIc";
+// Supabase publishable key (public by design; safe in the browser).
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_VQzQMWfZwYMb2rIlsoc-JA_Cblp13z4";
 
 // Production + branch deploys + deploy previews all live under *.netlify.app.
 const ALLOWED_ORIGIN_RE = /^https:\/\/(bfrs-events-staffing|[\w-]+--bfrs-events-staffing)\.netlify\.app$/;
@@ -31,7 +32,7 @@ async function verifyUser(authHeader) {
   if (!token) return null;
   try {
     const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-      headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_ANON_KEY },
+      headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_PUBLISHABLE_KEY },
     });
     if (res.status !== 200) return null;
     return await res.json();

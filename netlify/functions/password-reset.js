@@ -69,8 +69,9 @@ exports.handler = async (event) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        // New Supabase secret keys (sb_secret_...) aren't JWTs, so send the key on the
+        // apikey header only. Supabase rejects a non-JWT key on Authorization: Bearer.
         apikey: serviceKey,
-        Authorization: `Bearer ${serviceKey}`,
       },
       body: JSON.stringify({ type: "recovery", email, redirect_to: redirectTo }),
     });

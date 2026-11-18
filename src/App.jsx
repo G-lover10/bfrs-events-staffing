@@ -7,8 +7,9 @@ import { createClient } from "@supabase/supabase-js";
 // ╚══════════════════════════════════════════════════════════════════════════════╝
 
 const SUPABASE_URL = "https://tohhqssnngvavkkeqzfl.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvaGhxc3Nubmd2YXZra2VxemZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1NDg2NTAsImV4cCI6MjA5MDEyNDY1MH0.3mma-zOBQ63AM7FgHjRrKrnB_MX1FljnJPCrpmAMbIc";
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Supabase publishable key (public by design; safe in the browser).
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_VQzQMWfZwYMb2rIlsoc-JA_Cblp13z4";
+const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
 const APP_VERSION = "0.5.0";
 const SOFT_LIMIT = 4;
